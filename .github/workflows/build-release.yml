@@ -40,8 +40,9 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Accept Android SDK Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Prepare Keystore & Environment Files
         run: |
@@ -63,9 +64,12 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
       - name: Build APK
         run: |
-          gradle assembleDebug --stacktrace
+          ./gradlew assembleDebug --stacktrace
           
           # یافتن فایل APK تولید شده و کپی آن با نام تمیز
           mkdir -p release-artifacts
