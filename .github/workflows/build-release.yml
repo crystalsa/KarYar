@@ -98,32 +98,36 @@ jobs:
         id: release_info
         run: |
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-            echo "is_release=true" >> $GITHUB_OUTPUT
-          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.create_release }}" == "true" ]]; then
-            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
-            echo "is_release=true" >> $GITHUB_OUTPUT
+            TAG="${GITHUB_REF#refs/tags/}"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "title=نسخه $TAG - برنامه مدیریت کارگران" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.release_tag }}" ]]; then
+            TAG="${{ inputs.release_tag }}"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "title=نسخه $TAG - برنامه مدیریت کارگران" >> $GITHUB_OUTPUT
           else
-            echo "is_release=false" >> $GITHUB_OUTPUT
+            # هنگام هر پوش معمولی به main، ریلیز v1.0.0 به طور خودکار ساخته و فایل APK به آن پیوست می‌شود
+            TAG="v1.0.0"
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "title=نسخه رسمی برنامه مدیریت کارگران (v1.0.0)" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create GitHub Release & Upload APK
-        if: steps.release_info.outputs.is_release == 'true'
+      - name: Create or Update GitHub Release & Upload APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_info.outputs.tag }}
-          name: "نسخه ${{ steps.release_info.outputs.tag }} - برنامه مدیریت کارگران"
+          name: ${{ steps.release_info.outputs.title }}
           body: |
-            ### 📱 نسخه جدید برنامه مدیریت کارگران و دستمزد
-            
-            فایل نصبی اندروید (APK) آماده دانلود و نصب مستقیم روی گوشی:
+            ### 📱 فایل نصبی اندروید (APK) آماده دانلود و نصب مستقیم روی گوشی:
             - **نام فایل:** `WorkerManager-App.apk`
             - **نسخه:** `${{ steps.release_info.outputs.tag }}`
             - **ویژگی‌ها:** ارتباط مستقیم مبالغ کارگران با وضعیت حضور و غیاب، ستون اختصاصی نصف روز، مدیریت پوشه‌های روزانه و تقویم شمسی.
             
-            📥 برای دانلود فایل نصبی، روی **`WorkerManager-App.apk`** در بخش Assets در پایین همین صفحه کلیک کنید.
+            📥 **جهت دانلود و نصب روی گوشی اندروید:**
+            روی فایل **`WorkerManager-App.apk`** در بخش Assets (در پایین همین بخش) کلیک کنید.
           files: release-artifacts/WorkerManager-App.apk
           draft: false
           prerelease: false
+          make_latest: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
