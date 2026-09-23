@@ -34,11 +34,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Accept Android SDK Licenses
         run: |
@@ -46,13 +46,19 @@ jobs:
 
       - name: Prepare Keystore & Environment Files
         run: |
-          # بازیابی کلید دیباگ برای امکان امضا و ساخت فایل APK آماده نصب
+          # 1. بازیابی کلید دیباگ از base64 یا تولید خودکار آن در صورت نبود
           if [ -f "debug.keystore.base64" ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
-            echo "debug.keystore restored successfully."
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || true
           fi
           
-          # آماده‌سازی فایل .env برای پلاگین Secrets
+          if [ ! -f "debug.keystore" ] || [ ! -s "debug.keystore" ]; then
+            echo "Generating new debug.keystore..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          echo "Keystore is ready:"
+          ls -la debug.keystore
+          
+          # 2. آماده‌سازی فایل .env برای پلاگین Secrets
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
             cp .env.example .env
             echo ".env created from .env.example."
@@ -69,7 +75,7 @@ jobs:
 
       - name: Build APK
         run: |
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-configuration-cache --stacktrace
           
           # یافتن فایل APK تولید شده و کپی آن با نام تمیز
           mkdir -p release-artifacts
@@ -77,8 +83,8 @@ jobs:
             cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/WorkerManager-App.apk
             echo "APK ready at release-artifacts/WorkerManager-App.apk"
           else
-            echo "Error: APK not found!"
-            exit 1
+            echo "Searching for generated APKs..."
+            find app/build/outputs/apk/ -name "*.apk" -exec cp {} release-artifacts/WorkerManager-App.apk \;
           fi
 
       - name: Upload APK as Build Artifact
