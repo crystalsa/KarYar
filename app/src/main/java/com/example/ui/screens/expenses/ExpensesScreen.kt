@@ -52,6 +52,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.ExpenseEntity
@@ -123,14 +124,20 @@ fun ExpensesScreen(
                             Text(
                                 text = "مدیریت هزینه‌های جاری این کارگاه",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 14.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = Formatters.formatCurrency(totalAmount),
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = RoseAccent
+                                fontSize = 14.sp,
+                                color = RoseAccent,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Spacer(modifier = Modifier.height(6.dp))
@@ -306,47 +313,60 @@ private fun ExpenseCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
                             .background(catColor.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(catIcon, contentDescription = null, tint = catColor, modifier = Modifier.size(20.dp))
+                        Icon(catIcon, contentDescription = null, tint = catColor, modifier = Modifier.size(18.dp))
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = expense.title,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontSize = 13.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 text = catName,
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 color = catColor,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             if (expense.accommodationDays > 0) {
                                 Text(
                                     text = " • ${expense.accommodationDays} روز اسکان",
-                                    fontSize = 11.5.sp,
-                                    color = IndigoAccent
+                                    fontSize = 11.sp,
+                                    color = IndigoAccent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
                     }
                 }
 
+                Spacer(modifier = Modifier.width(6.dp))
+
                 Text(
                     text = Formatters.formatCurrency(expense.amount),
-                    fontSize = 14.sp,
+                    fontSize = 13.5.sp,
                     fontWeight = FontWeight.Bold,
-                    color = if (isGroup || isAllowance) AmberAccent else RoseAccent
+                    color = if (isGroup || isAllowance) AmberAccent else RoseAccent,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.model.WorkerPerformance
@@ -98,20 +99,25 @@ fun ReportsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "گزارشات و خروجی رسمی این کارگاه",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontSize = 15.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "صدور فیش حقوقی، گزارش هزینه‌ها و عملکرد با محاسبه تفکیکی",
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
                         StatusBadge(
                             text = "${performances.size} کارگر",
                             dotColor = AmberAccent
@@ -260,10 +266,13 @@ private fun WorkerPaySlipCard(perf: WorkerPerformance) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(40.dp)
+                            .size(38.dp)
                             .clip(CircleShape)
                             .background(Color(perf.worker.colorTag)),
                         contentAlignment = Alignment.Center
@@ -272,37 +281,45 @@ private fun WorkerPaySlipCard(perf: WorkerPerformance) {
                             text = perf.worker.name.take(1),
                             color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 16.sp
+                            fontSize = 15.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = perf.worker.name,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = perf.worker.role,
-                            fontSize = 12.sp,
+                            fontSize = 11.5.sp,
                             color = AmberAccent,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
                         text = "خالص دریافتی",
-                        fontSize = 11.sp,
+                        fontSize = 10.5.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = Formatters.formatCurrency(perf.netPayout),
-                        fontSize = 15.sp,
+                        fontSize = 14.sp,
                         fontWeight = FontWeight.Bold,
-                        color = EmeraldAccent
+                        color = EmeraldAccent,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -354,9 +371,25 @@ private fun ReportRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, fontSize = 11.5.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = value, fontSize = 12.sp, color = valueColor, fontWeight = FontWeight.SemiBold)
+        Text(
+            text = label,
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = value,
+            fontSize = 11.5.sp,
+            color = valueColor,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

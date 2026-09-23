@@ -46,6 +46,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.DateFolderEntity
@@ -248,10 +249,13 @@ fun AttendanceScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "نام کارگر (لمس جهت ویرایش)",
+                                    text = "نام کارگر",
                                     fontSize = 10.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
 
                                 Row(
@@ -261,12 +265,12 @@ fun AttendanceScreen(
                                     // 1. Full Day (حضور)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(42.dp),
+                                        modifier = Modifier.width(38.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "حضور",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = EmeraldAccent
                                         )
@@ -275,12 +279,12 @@ fun AttendanceScreen(
                                     // 2. Half Day (نصف روز)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(46.dp),
+                                        modifier = Modifier.width(42.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "نصف روز",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = AmberAccent
                                         )
@@ -289,12 +293,12 @@ fun AttendanceScreen(
                                     // 3. Absent (غیبت)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(40.dp),
+                                        modifier = Modifier.width(36.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "غیبت",
-                                            fontSize = 10.sp,
+                                            fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = RoseAccent
                                         )
@@ -347,56 +351,30 @@ fun AttendanceScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.width(6.dp))
-                                        Column {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
                                                 text = worker.name,
                                                 fontSize = 12.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                                            ) {
-                                                Text(
-                                                    text = worker.role,
-                                                    fontSize = 10.sp,
-                                                    color = AmberAccent,
-                                                    maxLines = 1
-                                                )
-                                                if (isHalfDay) {
-                                                    Text(
-                                                        text = "• نصف روز",
-                                                        fontSize = 9.5.sp,
-                                                        color = AmberAccent,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                } else if (isAbsent) {
-                                                    Text(
-                                                        text = "• غایب",
-                                                        fontSize = 9.5.sp,
-                                                        color = RoseAccent,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                                if (hasHourly) {
-                                                    Text(
-                                                        text = "• ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی",
-                                                        fontSize = 9.5.sp,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.Medium
-                                                    )
-                                                }
-                                                if (hasOvertime) {
-                                                    Text(
-                                                        text = "• +${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))}س اضافه",
-                                                        fontSize = 9.5.sp,
-                                                        color = EmeraldAccent,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                            }
+                                            val statusDetails = buildList {
+                                                add(worker.role)
+                                                if (isHalfDay) add("نصف روز")
+                                                else if (isAbsent) add("غایب")
+                                                if (hasHourly) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی")
+                                                if (hasOvertime) add("+${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))}س اضافه")
+                                            }.joinToString(" • ")
+
+                                            Text(
+                                                text = statusDetails,
+                                                fontSize = 9.5.sp,
+                                                color = if (isAbsent) RoseAccent else if (isHalfDay) AmberAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
                                         }
                                     }
 
@@ -407,7 +385,7 @@ fun AttendanceScreen(
                                     ) {
                                         // 1. Full Day Presence Checkbox
                                         Box(
-                                            modifier = Modifier.width(42.dp),
+                                            modifier = Modifier.width(38.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
@@ -426,7 +404,7 @@ fun AttendanceScreen(
 
                                         // 2. Half Day Presence Checkbox
                                         Box(
-                                            modifier = Modifier.width(46.dp),
+                                            modifier = Modifier.width(42.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
@@ -445,7 +423,7 @@ fun AttendanceScreen(
 
                                         // 3. Absence Checkbox
                                         Box(
-                                            modifier = Modifier.width(40.dp),
+                                            modifier = Modifier.width(36.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(

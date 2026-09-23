@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.WorkplaceFolderEntity
@@ -317,17 +318,22 @@ private fun FolderCardItem(
                         size = IconicsSize.MEDIUM
                     )
                     Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         // Workplace Name
                         Text(
                             text = folder.name,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 14.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         // FOREMAN NAME DIRECTLY UNDER WORKPLACE NAME (Mandatory user requirement)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             IconicsBox(
                                 icon = Icons.Default.Engineering,
                                 color = AmberAccent,
@@ -336,9 +342,11 @@ private fun FolderCardItem(
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = "سرکارگر: ${if (folder.foremanName.isNotBlank()) folder.foremanName else "تعیین نشده"}",
-                                fontSize = 11.5.sp,
+                                fontSize = 11.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = AmberAccent
+                                color = AmberAccent,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -346,14 +354,14 @@ private fun FolderCardItem(
 
                 // Action icons: Duplicate, Edit, Delete
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onDuplicate, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "کپی پوشه", tint = CyanAccent, modifier = Modifier.size(17.dp))
+                    IconButton(onClick = onDuplicate, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "کپی پوشه", tint = CyanAccent, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = onEdit, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Default.Edit, contentDescription = "ویرایش و تغییر نام", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(17.dp))
+                    IconButton(onClick = onEdit, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.Edit, contentDescription = "ویرایش و تغییر نام", tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                        Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = RoseAccent, modifier = Modifier.size(18.dp))
+                    IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                        Icon(Icons.Default.DeleteOutline, contentDescription = "حذف", tint = RoseAccent, modifier = Modifier.size(17.dp))
                     }
                 }
             }
@@ -370,8 +378,10 @@ private fun FolderCardItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = "کارفرما: ${folder.employerName}",
-                        fontSize = 11.5.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -380,9 +390,10 @@ private fun FolderCardItem(
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = folder.notes,
-                    fontSize = 11.5.sp,
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

@@ -69,6 +69,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -182,7 +183,7 @@ fun WorkerManagementApp(
                             Spacer(modifier = Modifier.width(10.dp))
                         }
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f, fill = false)) {
                             if (currentFolder != null) {
                                 // Workplace name
                                 Text(
@@ -190,8 +191,9 @@ fun WorkerManagementApp(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 15.sp,
-                                    maxLines = 1
+                                    fontSize = 14.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 // FOREMAN NAME DIRECTLY UNDER WORKPLACE NAME (Mandatory user rule)
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -204,10 +206,11 @@ fun WorkerManagementApp(
                                     Spacer(modifier = Modifier.width(3.dp))
                                     Text(
                                         text = "سرکارگر: ${if (currentFolder!!.foremanName.isNotBlank()) currentFolder!!.foremanName else "تعیین نشده"}",
-                                        fontSize = 11.5.sp,
+                                        fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = AmberAccent,
-                                        maxLines = 1
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             } else {
@@ -216,12 +219,16 @@ fun WorkerManagementApp(
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 15.5.sp
+                                    fontSize = 14.5.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = "پوشه‌ها، ثبت تردد، دستمزد و هزینه‌ها",
-                                    fontSize = 11.5.sp,
-                                    color = AmberAccent
+                                    fontSize = 10.5.sp,
+                                    color = AmberAccent,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -321,7 +328,10 @@ fun WorkerManagementApp(
                                 label = {
                                     Text(
                                         text = tab.title,
-                                        fontSize = 10.5.sp,
+                                        fontSize = 9.5.sp,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis,
                                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                     )
                                 },
