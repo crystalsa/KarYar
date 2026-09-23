@@ -1,0 +1,119 @@
+name: Build & Release Android APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'ایجاد ریلیز در گیت‌هاب (Create GitHub Release)'
+        required: false
+        type: boolean
+        default: true
+      release_tag:
+        description: 'تگ نسخه (مثلاً v1.0.0)'
+        required: false
+        type: string
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prepare Keystore & Environment Files
+        run: |
+          # بازیابی کلید دیباگ برای امکان امضا و ساخت فایل APK آماده نصب
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+            echo "debug.keystore restored successfully."
+          fi
+          
+          # آماده‌سازی فایل .env برای پلاگین Secrets
+          if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+            cp .env.example .env
+            echo ".env created from .env.example."
+          elif [ ! -f ".env" ]; then
+            touch .env
+            echo "Empty .env created."
+          fi
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        run: |
+          gradle assembleDebug --stacktrace
+          
+          # یافتن فایل APK تولید شده و کپی آن با نام تمیز
+          mkdir -p release-artifacts
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk release-artifacts/WorkerManager-App.apk
+            echo "APK ready at release-artifacts/WorkerManager-App.apk"
+          else
+            echo "Error: APK not found!"
+            exit 1
+          fi
+
+      - name: Upload APK as Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WorkerManager-APK
+          path: release-artifacts/WorkerManager-App.apk
+          retention-days: 30
+
+      - name: Determine Release Tag
+        id: release_info
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.create_release }}" == "true" ]]; then
+            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create GitHub Release & Upload APK
+        if: steps.release_info.outputs.is_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag }}
+          name: "نسخه ${{ steps.release_info.outputs.tag }} - برنامه مدیریت کارگران"
+          body: |
+            ### 📱 نسخه جدید برنامه مدیریت کارگران و دستمزد
+            
+            فایل نصبی اندروید (APK) آماده دانلود و نصب مستقیم روی گوشی:
+            - **نام فایل:** `WorkerManager-App.apk`
+            - **نسخه:** `${{ steps.release_info.outputs.tag }}`
+            - **ویژگی‌ها:** ارتباط مستقیم مبالغ کارگران با وضعیت حضور و غیاب، ستون اختصاصی نصف روز، مدیریت پوشه‌های روزانه و تقویم شمسی.
+            
+            📥 برای دانلود فایل نصبی، روی **`WorkerManager-App.apk`** در بخش Assets در پایین همین صفحه کلیک کنید.
+          files: release-artifacts/WorkerManager-App.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

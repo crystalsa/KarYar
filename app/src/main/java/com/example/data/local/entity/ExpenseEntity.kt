@@ -1,0 +1,33 @@
+package com.example.data.local.entity
+
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+@Entity(
+    tableName = "expenses",
+    indices = [
+        Index(value = ["folderId"]),
+        Index(value = ["workerId"]),
+        Index(value = ["date"])
+    ]
+)
+data class ExpenseEntity(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val folderId: Long = 0L,        // شناسه پوشه محل کار
+    val title: String,
+    val category: String,           // TRANSIT (ایاب و ذهاب), ACCOMMODATION (اسکان), FOOD (خوراک), MEDICAL (درمان), OTHER (سایر)
+    val scope: String,              // INDIVIDUAL (تکی), GROUP (جمعی)
+    val impactType: String = "DEDUCTION", // ALLOWANCE (افزایشی / اضافه به حقوق یا کمک‌هزینه), DEDUCTION (کاهشی / کسر از حقوق)
+    val workerId: Long? = null,     // در صورت تکی بودن، شناسه کارگر
+    val workerName: String? = null, // نام کارگر برای دسترسی سریع
+    val amount: Long,               // مبلغ هزینه (تومان)
+    val accommodationDays: Int = 0, // مدت زمان اسکان به روز
+    val date: String,               // تاریخ شمسی
+    val timestamp: Long = System.currentTimeMillis(),
+    val workplaceName: String = "", // نام محل کار / پروژه
+    val employerName: String = "",  // نام کارفرما
+    val foremanName: String = "",   // نام سرکارگر
+    val notes: String = ""          // توضیحات
+)
