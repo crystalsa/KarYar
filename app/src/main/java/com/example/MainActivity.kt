@@ -5,10 +5,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +37,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Assessment
 import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Engineering
@@ -39,6 +46,7 @@ import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -87,6 +95,7 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.RoseAccent
 import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
+import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate50
 
 enum class MainTab(val title: String, val icon: ImageVector, val tag: String) {
@@ -118,6 +127,8 @@ fun WorkerManagementApp(
     viewModel: WorkerViewModel = viewModel()
 ) {
     val currentFolder by viewModel.currentFolder.collectAsState()
+    val workerSearchQuery by viewModel.workerSearchQuery.collectAsState()
+    val isWorkerSearchVisible by viewModel.isWorkerSearchVisible.collectAsState()
     var selectedTab by remember { mutableStateOf(MainTab.DASHBOARD) }
     var showTopMenu by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
@@ -139,113 +150,136 @@ fun WorkerManagementApp(
                 color = MaterialTheme.colorScheme.surface,
                 shadowElevation = 1.dp
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (currentFolder != null) {
-                            // Back to folders button
-                            IconButton(
-                                onClick = { viewModel.selectFolder(null) },
-                                modifier = Modifier
-                                    .size(38.dp)
-                                    .testTag("back_to_folders_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "بازگشت به پوشه‌ها",
-                                    tint = MaterialTheme.colorScheme.onSurface
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(6.dp))
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(AmberAccent),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Engineering,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                        }
-
-                        Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             if (currentFolder != null) {
-                                // Workplace name
-                                Text(
-                                    text = currentFolder!!.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 14.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                // FOREMAN NAME DIRECTLY UNDER WORKPLACE NAME (Mandatory user rule)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                // Back to folders button
+                                IconButton(
+                                    onClick = { viewModel.selectFolder(null) },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .testTag("back_to_folders_button")
+                                ) {
                                     Icon(
-                                        Icons.Default.Engineering,
-                                        contentDescription = null,
-                                        tint = AmberAccent,
-                                        modifier = Modifier.size(13.dp)
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = "بازگشت به پوشه‌ها",
+                                        tint = MaterialTheme.colorScheme.onSurface
                                     )
-                                    Spacer(modifier = Modifier.width(3.dp))
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(AmberAccent),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Engineering,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
+                                if (currentFolder != null) {
+                                    // Workplace name
                                     Text(
-                                        text = "سرکارگر: ${if (currentFolder!!.foremanName.isNotBlank()) currentFolder!!.foremanName else "تعیین نشده"}",
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
+                                        text = currentFolder!!.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    // FOREMAN NAME DIRECTLY UNDER WORKPLACE NAME (Mandatory user rule)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Engineering,
+                                            contentDescription = null,
+                                            tint = AmberAccent,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(
+                                            text = "سرکارگر: ${if (currentFolder!!.foremanName.isNotBlank()) currentFolder!!.foremanName else "تعیین نشده"}",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = AmberAccent,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "مدیریت کارگران و کارگاه",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        fontSize = 14.5.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "پوشه‌ها، ثبت تردد، دستمزد و هزینه‌ها",
+                                        fontSize = 10.5.sp,
                                         color = AmberAccent,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
                                     )
                                 }
-                            } else {
-                                Text(
-                                    text = "مدیریت کارگران و کارگاه",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    fontSize = 14.5.sp,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "پوشه‌ها، ثبت تردد، دستمزد و هزینه‌ها",
-                                    fontSize = 10.5.sp,
-                                    color = AmberAccent,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
                             }
                         }
-                    }
 
-                    // 3-DOT MENU BUTTON AT TOP (User requirement: "یالا صفحه یک سه نقطه بزار که اطلاعات نمونه رو بشه اضافه کرد")
-                    Box {
-                        IconButton(
-                            onClick = { showTopMenu = true },
-                            modifier = Modifier.testTag("app_top_3dot_menu_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "منوی گزینه‌ها",
-                                tint = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
+                        // Right side icons: Magnifying glass beside 3-dots button
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (currentFolder != null) {
+                                IconButton(
+                                    onClick = {
+                                        if (selectedTab != MainTab.WORKERS) {
+                                            selectedTab = MainTab.WORKERS
+                                        }
+                                        viewModel.toggleWorkerSearch()
+                                    },
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .testTag("app_top_search_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = "جستجوی کارگر",
+                                        tint = if (isWorkerSearchVisible) AmberAccent else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+
+                            // 3-DOT MENU BUTTON AT TOP
+                            Box {
+                                IconButton(
+                                    onClick = { showTopMenu = true },
+                                    modifier = Modifier.testTag("app_top_3dot_menu_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "منوی گزینه‌ها",
+                                        tint = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
 
                         DropdownMenu(
                             expanded = showTopMenu,
@@ -291,8 +325,87 @@ fun WorkerManagementApp(
                     }
                 }
             }
-        },
-        bottomBar = {
+
+            // کادر موقت برای جست و جو زیر سرکارگر
+            AnimatedVisibility(
+                visible = isWorkerSearchVisible && currentFolder != null,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = Slate100,
+                    tonalElevation = 1.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = AmberAccent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        BasicTextField(
+                            value = workerSearchQuery,
+                            onValueChange = { viewModel.setWorkerSearchQuery(it) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("temporary_worker_search_input"),
+                            singleLine = true,
+                            textStyle = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 12.5.sp
+                            ),
+                            decorationBox = { innerTextField ->
+                                if (workerSearchQuery.isEmpty()) {
+                                    Text(
+                                        text = "جست و جوی کارگر",
+                                        color = Slate400,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Normal
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                        if (workerSearchQuery.isNotEmpty()) {
+                            IconButton(
+                                onClick = { viewModel.setWorkerSearchQuery("") },
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "پاک کردن",
+                                    tint = Slate400,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = { viewModel.toggleWorkerSearch(false) },
+                            modifier = Modifier.size(26.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = "بستن جستجو",
+                                tint = RoseAccent,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    },
+    bottomBar = {
             // Show bottom navigation bar only when a folder is actively opened
             if (currentFolder != null) {
                 Surface(

@@ -225,4 +225,95 @@ object JalaliCalendar {
     )
 
     fun todayDayOfWeek(): String = getDayOfWeek()
+
+    /**
+     * Checks if a Jalali year is a leap year (کبیسه).
+     */
+    fun isLeapYear(year: Int): Boolean {
+        val a = year - 474
+        val b = (a % 2820 + 2820) % 2820 + 474
+        return ((b + 38) * 682) % 2816 < 682
+    }
+
+    /**
+     * Returns exact days count for any Jalali month:
+     * 1..6 (فروردین تا شهریور): 31 days
+     * 7..11 (مهر تا بهمن): 30 days
+     * 12 (اسفند): 29 days (30 in leap years)
+     */
+    fun getDaysInMonth(year: Int, month: Int): Int {
+        return when (month) {
+            in 1..6 -> 31
+            in 7..11 -> 30
+            12 -> if (isLeapYear(year)) 30 else 29
+            else -> 30
+        }
+    }
+
+    fun getMonthName(month: Int): String {
+        return if (month in 1..12) PERSIAN_MONTH_NAMES[month - 1] else "$month"
+    }
+
+    fun parseDate(dateStr: String): Triple<Int, Int, Int> {
+        val eng = toEnglishDigits(dateStr)
+        val parts = eng.replace('-', '/').split('/')
+        val jy = parts.getOrNull(0)?.trim()?.toIntOrNull() ?: today().year
+        val jm = (parts.getOrNull(1)?.trim()?.toIntOrNull() ?: today().month).coerceIn(1, 12)
+        val maxDays = getDaysInMonth(jy, jm)
+        val jd = (parts.getOrNull(2)?.trim()?.toIntOrNull() ?: today().day).coerceIn(1, maxDays)
+        return Triple(jy, jm, jd)
+    }
+
+    fun formatDate(year: Int, month: Int, day: Int): String {
+        return String.format("%04d/%02d/%02d", year, month, day)
+    }
+
+    /**
+     * Advances to the next day strictly following Persian calendar:
+     * 31 Shahrivar -> 1 Mehr (never 32 Shahrivar)
+     * 29/30 Esfand -> 1 Farvardin of next year
+     */
+    fun nextDay(dateStr: String): Pair<String, String> {
+        val (y, m, d) = parseDate(dateStr)
+        val daysInM = getDaysInMonth(y, m)
+        val (nextY, nextM, nextD) = when {
+            d < daysInM -> Triple(y, m, d + 1)
+            m < 12 -> Triple(y, m + 1, 1)
+            else -> Triple(y + 1, 1, 1)
+        }
+        val nextDateStr = formatDate(nextY, nextM, nextD)
+        val nextDow = getDayOfWeek(nextDateStr)
+        return Pair(nextDateStr, nextDow)
+    }
+
+    /**
+     * Moves to the previous day strictly following Persian calendar:
+     * 1 Mehr -> 31 Shahrivar
+     * 1 Farvardin -> 29/30 Esfand of previous year
+     */
+    fun previousDay(dateStr: String): Pair<String, String> {
+        val (y, m, d) = parseDate(dateStr)
+        val (prevY, prevM, prevD) = when {
+            d > 1 -> Triple(y, m, d - 1)
+            m > 1 -> Triple(y, m - 1, getDaysInMonth(y, m - 1))
+            else -> Triple(y - 1, 12, getDaysInMonth(y - 1, 12))
+        }
+        val prevDateStr = formatDate(prevY, prevM, prevD)
+        val prevDow = getDayOfWeek(prevDateStr)
+        return Pair(prevDateStr, prevDow)
+    }
+
+    fun addDays(dateStr: String, daysToAdd: Int): Pair<String, String> {
+        var current = dateStr
+        if (daysToAdd > 0) {
+            repeat(daysToAdd) {
+                current = nextDay(current).first
+            }
+        } else if (daysToAdd < 0) {
+            repeat(-daysToAdd) {
+                current = previousDay(current).first
+            }
+        }
+        return Pair(current, getDayOfWeek(current))
+    }
 }

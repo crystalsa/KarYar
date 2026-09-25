@@ -11,10 +11,10 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DateFolderDao {
-    @Query("SELECT * FROM date_folders WHERE folderId = :folderId ORDER BY id DESC")
+    @Query("SELECT * FROM date_folders WHERE folderId = :folderId ORDER BY date ASC, id ASC")
     fun getDateFoldersByFolder(folderId: Long): Flow<List<DateFolderEntity>>
 
-    @Query("SELECT * FROM date_folders WHERE folderId = :folderId ORDER BY id DESC")
+    @Query("SELECT * FROM date_folders WHERE folderId = :folderId ORDER BY date ASC, id ASC")
     suspend fun getDateFoldersByFolderSync(folderId: Long): List<DateFolderEntity>
 
     @Query("SELECT * FROM date_folders WHERE id = :id")

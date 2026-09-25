@@ -20,7 +20,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
@@ -76,7 +79,10 @@ import com.example.ui.theme.IndigoAccent
 import com.example.ui.theme.RoseAccent
 import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
+import com.example.ui.theme.Slate300
+import com.example.ui.theme.Slate500
 import com.example.util.Formatters
+import com.example.util.JalaliCalendar
 
 private val PRESET_ROLES = listOf(
     "کارگر ساده", "بنا", "گچ‌کار", "جوشکار", "برق‌کار", "لوله‌کش", "آرماتوربند", "قالب‌بند", "نقاش", "سرکارگر"
@@ -93,9 +99,26 @@ private val COLOR_OPTIONS = listOf(
 @Composable
 fun AddEditWorkerDialog(
     initialWorker: WorkerEntity? = null,
+    initialDate: String? = null,
+    initialDayOfWeek: String? = null,
     onDismiss: () -> Unit,
     onConfirm: (WorkerEntity) -> Unit
 ) {
+    var workDate by remember {
+        mutableStateOf(
+            if (!initialWorker?.workDate.isNullOrBlank()) initialWorker!!.workDate
+            else if (!initialDate.isNullOrBlank()) initialDate!!
+            else JalaliCalendar.todayString()
+        )
+    }
+    var dayOfWeek by remember {
+        mutableStateOf(
+            if (!initialWorker?.dayOfWeek.isNullOrBlank()) initialWorker!!.dayOfWeek
+            else if (!initialDayOfWeek.isNullOrBlank()) initialDayOfWeek!!
+            else JalaliCalendar.getDayOfWeek(workDate)
+        )
+    }
+
     var name by remember { mutableStateOf(initialWorker?.name ?: "") }
     var role by remember { mutableStateOf(initialWorker?.role ?: "کارگر ساده") }
     var isPhoneEnabled by remember {
@@ -285,6 +308,8 @@ fun AddEditWorkerDialog(
             val finalNationalId = if (isNationalIdEnabled) nationalId.trim() else ""
 
             val entity = (initialWorker ?: WorkerEntity(name = name, role = role)).copy(
+                workDate = workDate,
+                dayOfWeek = dayOfWeek,
                 name = name.trim(),
                 role = role.trim(),
                 phone = finalPhone,
@@ -350,7 +375,7 @@ fun AddEditWorkerDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (initialWorker == null) "افزودن کارگر به کارگاه" else "ویرایش پروفایل کارگر",
+                            text = if (initialWorker == null) "افزودن کارگر" else "ویرایش کارگر",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.5.sp,
@@ -365,13 +390,45 @@ fun AddEditWorkerDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Date & Day Display Card: Day first, then Date
+                HairlineCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    backgroundColor = AmberAccent.copy(alpha = 0.08f)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconicsBox(
+                            icon = Icons.Default.CalendarMonth,
+                            color = AmberAccent,
+                            size = IconicsSize.TINY
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        val cleanDay = dayOfWeek.ifBlank { JalaliCalendar.getDayOfWeek(workDate) }
+                            .replace("روز", "")
+                            .trim()
+                        Text(
+                            text = "$cleanDay  ${Formatters.toPersianDigits(workDate)}",
+                            fontSize = 12.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AmberAccent
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Name & Role compactly stacked
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("نام و نام خانوادگی", fontSize = 12.sp) },
+                    label = { Text("نام کارگر", fontSize = 12.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Person, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
                     },
@@ -416,7 +473,7 @@ fun AddEditWorkerDialog(
                 OutlinedTextField(
                     value = role,
                     onValueChange = { role = it },
-                    label = { Text("عنوان شغل / تخصص", fontSize = 12.sp) },
+                    label = { Text("عنوان شغل", fontSize = 12.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Engineering, contentDescription = null, tint = CyanAccent, modifier = Modifier.size(16.dp))
                     },
@@ -426,7 +483,7 @@ fun AddEditWorkerDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // --- 1. Phone Section: Activated by Checkbox with Large Full-Width Field ---
+                // --- 1. Phone Section: Toggling preserves phone text ---
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
                     backgroundColor = Slate100,
@@ -439,10 +496,7 @@ fun AddEditWorkerDialog(
                         ) {
                             Checkbox(
                                 checked = isPhoneEnabled,
-                                onCheckedChange = {
-                                    isPhoneEnabled = it
-                                    if (!it) phone = ""
-                                },
+                                onCheckedChange = { isPhoneEnabled = it },
                                 colors = CheckboxDefaults.colors(checkedColor = EmeraldAccent),
                                 modifier = Modifier.size(24.dp)
                             )
@@ -454,7 +508,7 @@ fun AddEditWorkerDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "ثبت شماره تلفن همراه کارگر",
+                                text = "شماره تماس",
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -469,7 +523,7 @@ fun AddEditWorkerDialog(
                                     val digitsOnly = Formatters.toEnglishDigits(input).filter { it.isDigit() }.take(11)
                                     phone = digitsOnly
                                 },
-                                label = { Text("شماره همراه (۱۱ رقم)", fontSize = 11.sp) },
+                                label = { Text("شماره تماس", fontSize = 11.sp) },
                                 placeholder = { Text("09123456789", fontSize = 11.sp) },
                                 leadingIcon = {
                                     Icon(Icons.Default.Phone, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(14.dp))
@@ -492,7 +546,7 @@ fun AddEditWorkerDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // --- 2. National ID Section: Below Phone, Activated by Checkbox with Large Full-Width Field ---
+                // --- 2. National ID Section: Toggling preserves nationalId text ---
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
                     backgroundColor = Slate100,
@@ -505,10 +559,7 @@ fun AddEditWorkerDialog(
                         ) {
                             Checkbox(
                                 checked = isNationalIdEnabled,
-                                onCheckedChange = {
-                                    isNationalIdEnabled = it
-                                    if (!it) nationalId = ""
-                                },
+                                onCheckedChange = { isNationalIdEnabled = it },
                                 colors = CheckboxDefaults.colors(checkedColor = IndigoAccent),
                                 modifier = Modifier.size(24.dp)
                             )
@@ -520,7 +571,7 @@ fun AddEditWorkerDialog(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "ثبت کد ملی کارگر",
+                                text = "کد ملی",
                                 fontWeight = FontWeight.SemiBold,
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -535,7 +586,7 @@ fun AddEditWorkerDialog(
                                     val digitsOnly = Formatters.toEnglishDigits(input).filter { it.isDigit() }.take(10)
                                     nationalId = digitsOnly
                                 },
-                                label = { Text("کد ملی (۱۰ رقم)", fontSize = 11.sp) },
+                                label = { Text("کد ملی", fontSize = 11.sp) },
                                 placeholder = { Text("0012345678", fontSize = 11.sp) },
                                 leadingIcon = {
                                     Icon(Icons.Default.Badge, contentDescription = null, tint = IndigoAccent, modifier = Modifier.size(14.dp))
@@ -562,7 +613,7 @@ fun AddEditWorkerDialog(
                 OutlinedTextField(
                     value = baseDailyWage,
                     onValueChange = { baseDailyWage = Formatters.formatPriceInput(it) },
-                    label = { Text("دستمزد روزانه پایه (تومان)", fontSize = 12.sp) },
+                    label = { Text("دستمزد روزانه (تومان)", fontSize = 12.sp) },
                     placeholder = { Text("مثلاً ۱,۲۰۰,۰۰۰", fontSize = 11.sp) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
@@ -571,7 +622,7 @@ fun AddEditWorkerDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // --- SECTION: Hourly Wage (Tight Compact Card) ---
+                // --- SECTION: Hourly Wage ---
                 val parsedHourlyRateVal = Formatters.parsePrice(hourlyWageRate)
                 val parsedHourlyHoursVal = Formatters.parseDouble(hourlyHours)
                 val hourlyTotal = if (isHourlyEnabled && parsedHourlyRateVal > 0 && parsedHourlyHoursVal > 0) {
@@ -598,7 +649,7 @@ fun AddEditWorkerDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "محاسبه دستمزد ساعتی",
+                                    text = "دستمزد ساعتی",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -647,7 +698,7 @@ fun AddEditWorkerDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // --- SECTION: Overtime (Tight Compact Card) ---
+                // --- SECTION: Overtime ---
                 val parsedOtRateVal = Formatters.parsePrice(overtimeRate)
                 val parsedOtHoursVal = Formatters.parseDouble(overtimeHours)
                 val overtimeTotal = if (isOvertimeEnabled && parsedOtRateVal > 0 && parsedOtHoursVal > 0) {
@@ -674,7 +725,7 @@ fun AddEditWorkerDialog(
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
                                 Text(
-                                    text = "محاسبه اضافه کاری",
+                                    text = "اضافه کاری",
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.5.sp,
                                     color = MaterialTheme.colorScheme.onSurface
@@ -699,7 +750,7 @@ fun AddEditWorkerDialog(
                                 OutlinedTextField(
                                     value = overtimeRate,
                                     onValueChange = { overtimeRate = Formatters.formatPriceInput(it) },
-                                    label = { Text("مبلغ اضافه کار (تومان)", fontSize = 11.sp) },
+                                    label = { Text("نرخ اضافه کار (تومان)", fontSize = 11.sp) },
                                     placeholder = { Text("نرخ هر ساعت", fontSize = 11.sp) },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.weight(1.2f),
@@ -723,7 +774,7 @@ fun AddEditWorkerDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // --- SECTION: Individual Costs (Compact rows, no dead space) ---
+                // --- SECTION: Individual Costs ---
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
                     backgroundColor = Slate100,
@@ -736,13 +787,13 @@ fun AddEditWorkerDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "هزینه‌های فردی کارگر",
+                                text = "هزینه‌های فردی",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
                             )
                             Text(
-                                text = "+ افزایشی / - کسورات",
+                                text = "+ اضافه / - کسر",
                                 fontSize = 10.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -766,7 +817,7 @@ fun AddEditWorkerDialog(
 
                         // 2. Accommodation
                         ExpenseSettingRow(
-                            title = "مسکن و اسکان",
+                            title = "مسکن",
                             icon = Icons.Default.Home,
                             iconColor = IndigoAccent,
                             enabled = accommodationEnabled,
@@ -781,7 +832,7 @@ fun AddEditWorkerDialog(
 
                         // 3. Food
                         ExpenseSettingRow(
-                            title = "خوراک و غذا",
+                            title = "خوراک",
                             icon = Icons.Default.LocalDining,
                             iconColor = AmberAccent,
                             enabled = foodEnabled,
@@ -796,7 +847,7 @@ fun AddEditWorkerDialog(
 
                         // 4. Medical
                         ExpenseSettingRow(
-                            title = "درمان و دارو",
+                            title = "درمان",
                             icon = Icons.Default.MedicalServices,
                             iconColor = RoseAccent,
                             enabled = medicalEnabled,
@@ -809,44 +860,35 @@ fun AddEditWorkerDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Half-sized Active/Inactive Status Button & Color palette
+                // Android Settings-like On/Off Switch for Active/Inactive status & Color palette
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Half-sized compact Status Toggle Button
-                    Surface(
-                        shape = RoundedCornerShape(8.dp),
-                        color = if (isActive) EmeraldAccent.copy(alpha = 0.12f) else RoseAccent.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.dp,
-                            if (isActive) EmeraldAccent.copy(alpha = 0.6f) else RoseAccent.copy(alpha = 0.6f)
-                        ),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { isActive = !isActive }
+                    // Android settings style Switch with status label
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.5.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .clip(CircleShape)
-                                    .background(if (isActive) EmeraldAccent else RoseAccent)
+                        Switch(
+                            checked = isActive,
+                            onCheckedChange = { isActive = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = EmeraldAccent,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedTrackColor = Slate300
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Text(
-                                text = if (isActive) "وضعیت: فعال" else "وضعیت: غیرفعال",
-                                fontSize = 10.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isActive) EmeraldAccent else RoseAccent
-                            )
-                        }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (isActive) "کارگر فعال" else "کارگر غیرفعال",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isActive) EmeraldAccent else Slate500
+                        )
                     }
 
                     // Color palette
@@ -858,7 +900,7 @@ fun AddEditWorkerDialog(
                             val isSelected = selectedColor == colorVal
                             Box(
                                 modifier = Modifier
-                                    .size(22.dp)
+                                    .size(24.dp)
                                     .clip(CircleShape)
                                     .background(Color(colorVal))
                                     .clickable { selectedColor = colorVal },
@@ -869,7 +911,7 @@ fun AddEditWorkerDialog(
                                         Icons.Default.Check,
                                         contentDescription = null,
                                         tint = Color.White,
-                                        modifier = Modifier.size(12.dp)
+                                        modifier = Modifier.size(13.dp)
                                     )
                                 }
                             }
@@ -883,7 +925,7 @@ fun AddEditWorkerDialog(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("یادداشت و مهارت (اختیاری)", fontSize = 11.sp) },
+                    label = { Text("یادداشت", fontSize = 11.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
                     },
@@ -905,7 +947,7 @@ fun AddEditWorkerDialog(
                         height = 42.dp
                     )
                     LoadingButton(
-                        text = if (initialWorker == null) "ثبت کارگر" else "ذخیره تغییرات",
+                        text = if (initialWorker == null) "ثبت" else "ذخیره",
                         icon = if (initialWorker == null) Icons.Default.PersonAdd else Icons.Default.Save,
                         onClick = { saveWorker() },
                         isLoading = isSaving,
@@ -931,13 +973,13 @@ fun AddEditWorkerDialog(
             },
             text = {
                 Text(
-                    text = "اطلاعات وارد شده ذخیره نشده است. آیا می‌خواهید تغییرات را دور بریزید یا ابتدا ذخیره کنید؟",
+                    text = "اطلاعات ذخیره نشده است. خارج می‌شوید؟",
                     fontSize = 12.5.sp
                 )
             },
             confirmButton = {
                 LoadingButton(
-                    text = "ذخیره تغییرات",
+                    text = "ذخیره",
                     onClick = {
                         showUnsavedAlert = false
                         saveWorker()
@@ -952,7 +994,7 @@ fun AddEditWorkerDialog(
                     showUnsavedAlert = false
                     onDismiss()
                 }) {
-                    Text("خروج بدون ذخیره", color = RoseAccent, fontSize = 12.sp)
+                    Text("انصراف", color = RoseAccent, fontSize = 12.sp)
                 }
             }
         )

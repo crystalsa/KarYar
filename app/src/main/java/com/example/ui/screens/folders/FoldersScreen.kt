@@ -116,18 +116,17 @@ fun FoldersScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "هیچ پوشه محل کاری تعریف نشده است",
+                                text = "هیچ کارگاهی وجود ندارد",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "برای شروع کار با برنامه، لطفاً اولین پوشه محل کار (پروژه) را بسازید یا از سه نقطه بالای صفحه اطلاعات نمونه را بارگذاری کنید.",
+                                text = "یک کارگاه جدید بسازید یا داده نمونه بارگذاری کنید.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 17.sp
+                                textAlign = TextAlign.Center
                             )
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(

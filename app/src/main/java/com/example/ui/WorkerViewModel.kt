@@ -97,19 +97,29 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Workers inside the active date folder
-    val workersInDateFolder: StateFlow<List<WorkerEntity>> = selectedDateFolder.flatMapLatest { dateFolder ->
-        if (dateFolder != null) repository.getWorkersByDateFolder(dateFolder.id)
-        else flowOf(emptyList())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    // Selected Date for Daily Bookkeeping on Dashboard
-    val selectedDailyDate = MutableStateFlow<String>(JalaliCalendar.todayString())
-
     // Attendance for selected folder
     val attendanceList: StateFlow<List<AttendanceEntity>> = currentFolder.flatMapLatest { folder ->
         if (folder != null) repository.getAttendanceByFolder(folder.id)
         else flowOf(emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Workers inside the active date folder (همگام با حضور و غیاب و پوشه تاریخ)
+    val workersInDateFolder: StateFlow<List<WorkerEntity>> = combine(
+        selectedDateFolder,
+        workers,
+        attendanceList
+    ) { dateFolder, workerList, attList ->
+        if (dateFolder != null) {
+            val attendedIds = attList.filter { it.date == dateFolder.date }.map { it.workerId }.toSet()
+            val specific = workerList.filter { worker ->
+                worker.id in attendedIds ||
+                worker.dateFolderId == dateFolder.id ||
+                worker.workDate == dateFolder.date
+            }
+            if (specific.isNotEmpty()) specific else workerList
+        } else {
+            workerList
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Expenses for selected folder
@@ -118,44 +128,89 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Selected Date for Daily Bookkeeping on Dashboard
+    val selectedDailyDate = MutableStateFlow<String>(JalaliCalendar.todayString())
+
+    // Worker search state (ذره‌بین بالای صفحه کنار سه نقطه)
+    val workerSearchQuery = MutableStateFlow("")
+    val isWorkerSearchVisible = MutableStateFlow(false)
+
+    fun setWorkerSearchQuery(query: String) {
+        workerSearchQuery.value = query
+    }
+
+    fun toggleWorkerSearch(visible: Boolean? = null) {
+        val next = visible ?: !isWorkerSearchVisible.value
+        isWorkerSearchVisible.value = next
+        if (!next) {
+            workerSearchQuery.value = ""
+        }
+    }
+
     // Daily Bookkeeping (حساب و کتاب روزانه در صفحه اصلی)
     val dailyBookkeeping: StateFlow<DailyBookkeeping> = combine(
         selectedDailyDate,
         workers,
         attendanceList,
-        expenses
-    ) { dateStr, workerList, attList, expList ->
-        val dailyAtts = attList.filter { it.date == dateStr }
+        expenses,
+        dateFolders
+    ) { dateStr, workerList, attList, expList, dfList ->
         val dailyExps = expList.filter { it.date == dateStr }
+        val targetDf = dfList.find { it.date == dateStr }
+        val dayWorkers = if (targetDf != null) {
+            val specific = workerList.filter { it.dateFolderId == targetDf.id || it.workDate == targetDf.date }
+            if (specific.isNotEmpty()) specific else workerList
+        } else {
+            val specific = workerList.filter { it.workDate == dateStr }
+            if (specific.isNotEmpty()) specific else workerList
+        }
 
         var wages = 0L
         var hourlyPay = 0L
         var overtimePay = 0L
         var bonuses = 0L
+        var allowancesNet = 0L
         var hours = 0.0
+        var presentCount = 0
 
-        for (att in dailyAtts) {
-            val worker = workerList.find { it.id == att.workerId }
-            wages += att.dailyWage
+        for (worker in dayWorkers) {
+            val att = attList.firstOrNull { it.workerId == worker.id && it.date == dateStr }
+            val isAbsent = (att != null && (att.regularHours == 0.0 || att.notes == "غیبت"))
+            val isHalfDay = (att != null && (att.regularHours == 4.0 || att.notes == "نصف روز"))
 
-            // Hourly pay
-            val hRate = if (att.hourlyWageRate > 0) att.hourlyWageRate else (worker?.hourlyWageRate ?: 0L)
-            val hHours = if (att.hourlyHours > 0) att.hourlyHours else (worker?.hourlyHours ?: 0.0)
-            val hPay = if (hHours > 0 && hRate > 0) (hHours * hRate).toLong() else 0L
-            hourlyPay += hPay
+            if (!isAbsent) {
+                presentCount++
+                val baseWage = when {
+                    isHalfDay -> if (att?.dailyWage != null && att.dailyWage > 0) att.dailyWage else worker.baseDailyWage / 2
+                    att != null && att.dailyWage > 0 -> att.dailyWage
+                    else -> worker.baseDailyWage
+                }
+                wages += baseWage
 
-            // Overtime pay
-            val otHours = if (att.overtimeHours > 0) att.overtimeHours else (worker?.overtimeHours ?: 0.0)
-            val otRate = if (att.overtimeRate > 0) att.overtimeRate else (worker?.overtimeRate ?: 0L)
-            val otPaid = if (otHours > 0) {
-                if (otRate > 0) (otHours * otRate).toLong()
-                else if (att.hourlyWage > 0) (otHours * att.hourlyWage * 1.4).toLong()
-                else 0L
-            } else 0L
-            overtimePay += otPaid
+                val hHours = if (att != null && att.hourlyHours > 0) att.hourlyHours else worker.hourlyHours
+                val hRate = if (att != null && att.hourlyWageRate > 0) att.hourlyWageRate else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)
+                val hPay = if (hHours > 0 && hRate > 0) (hHours * hRate).toLong() else 0L
+                hourlyPay += hPay
 
-            bonuses += att.bonus
-            hours += (att.regularHours + hHours + otHours)
+                val otHours = if (att != null && att.overtimeHours > 0) att.overtimeHours else worker.overtimeHours
+                val otRate = if (att != null && att.overtimeRate > 0) att.overtimeRate else worker.overtimeRate
+                val otPaid = if (otHours > 0) {
+                    if (otRate > 0) (otHours * otRate).toLong()
+                    else if (att != null && att.hourlyWage > 0) (otHours * att.hourlyWage * 1.4).toLong()
+                    else 0L
+                } else 0L
+                overtimePay += otPaid
+
+                bonuses += (att?.bonus ?: 0L)
+                val regHours = if (att != null) att.regularHours else (if (isHalfDay) 4.0 else 8.0)
+                hours += (regHours + hHours + otHours)
+
+                val transit = if (worker.transitImpact == "ALLOWANCE") worker.transitAllowance else -worker.transitAllowance
+                val accom = if (worker.accommodationImpact == "ALLOWANCE") worker.accommodationAllowance else -worker.accommodationAllowance
+                val food = if (worker.foodImpact == "ALLOWANCE") worker.foodAllowance else -worker.foodAllowance
+                val med = if (worker.medicalImpact == "ALLOWANCE") worker.medicalAllowance else -worker.medicalAllowance
+                allowancesNet += (transit + accom + food + med)
+            }
         }
 
         val transitTotal = dailyExps.filter { it.category == "TRANSIT" }.sumOf { it.amount }
@@ -163,37 +218,36 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         val foodTotal = dailyExps.filter { it.category == "FOOD" }.sumOf { it.amount }
         val medTotal = dailyExps.filter { it.category == "MEDICAL" }.sumOf { it.amount }
         val expensesTotal = dailyExps.sumOf { it.amount }
-        val grandDailyCost = wages + hourlyPay + overtimePay + bonuses + expensesTotal
+        val grandDailyCost = wages + hourlyPay + overtimePay + bonuses + allowancesNet + expensesTotal
 
         DailyBookkeeping(
             date = dateStr,
             dayOfWeek = JalaliCalendar.getDayOfWeek(dateStr),
-            grandDailyCost = grandDailyCost,
+            grandDailyCost = grandDailyCost.coerceAtLeast(0L),
             totalDailyWages = wages,
             totalHourlyPay = hourlyPay,
             totalOvertimePay = overtimePay,
             totalBonuses = bonuses,
             dailyExpenses = expensesTotal,
-            workersPresent = dailyAtts.filter { it.regularHours > 0.0 || it.notes == "حاضر" || it.notes == "نصف روز" }.map { it.workerId }.distinct().size,
+            workersPresent = presentCount,
             totalHours = hours,
             transitCost = transitTotal,
             accommodationCost = accTotal,
             foodCost = foodTotal,
             medicalCost = medTotal,
-            attendances = dailyAtts,
+            attendances = attList.filter { it.date == dateStr },
             expenses = dailyExps
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DailyBookkeeping())
 
-    // Reactive Analytics for the current folder
+    // Reactive Analytics for the current folder - synced with all days & all workers
     val analytics: StateFlow<DashboardAnalytics> = combine(
         workers,
         attendanceList,
-        expenses
-    ) { workerList, attList, expList ->
+        expenses,
+        dateFolders
+    ) { workerList, attList, expList, dfList ->
         val todayStr = JalaliCalendar.todayString()
-        val todayCount = attList.count { it.date == todayStr }
-
         var totalHours = 0.0
         var totalOtHours = 0.0
         var totalEarlyMins = 0
@@ -201,27 +255,91 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         var totalHourlyPaid = 0L
         var totalOtPay = 0L
         var totalBonuses = 0L
+        var totalAllowancesNet = 0L
+        var todayCount = 0
 
+        val daysToEvaluate = if (dfList.isNotEmpty()) {
+            dfList.map { it.date to it.id }.distinctBy { it.first }
+        } else {
+            val distinctDates = attList.map { it.date }.distinct()
+            if (distinctDates.isNotEmpty()) distinctDates.map { it to null }
+            else listOf(todayStr to null)
+        }
+
+        val processedAttIds = mutableSetOf<Long>()
+
+        for ((dayDate, dayFolderId) in daysToEvaluate) {
+            val dayWorkers = if (dayFolderId != null) {
+                val specific = workerList.filter { it.dateFolderId == dayFolderId || it.workDate == dayDate }
+                if (specific.isNotEmpty()) specific else workerList
+            } else {
+                val specific = workerList.filter { it.workDate == dayDate }
+                if (specific.isNotEmpty()) specific else workerList
+            }
+
+            for (worker in dayWorkers) {
+                val att = attList.firstOrNull { it.workerId == worker.id && it.date == dayDate }
+                if (att != null) processedAttIds.add(att.id)
+
+                val isAbsent = (att != null && (att.regularHours == 0.0 || att.notes == "غیبت"))
+                val isHalfDay = (att != null && (att.regularHours == 4.0 || att.notes == "نصف روز"))
+
+                if (!isAbsent) {
+                    if (dayDate == todayStr) todayCount++
+
+                    val baseWage = when {
+                        isHalfDay -> if (att?.dailyWage != null && att.dailyWage > 0) att.dailyWage else worker.baseDailyWage / 2
+                        att != null && att.dailyWage > 0 -> att.dailyWage
+                        else -> worker.baseDailyWage
+                    }
+                    totalWages += baseWage
+
+                    val hHours = if (att != null && att.hourlyHours > 0) att.hourlyHours else worker.hourlyHours
+                    val hRate = if (att != null && att.hourlyWageRate > 0) att.hourlyWageRate else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)
+                    totalHourlyPaid += if (hHours > 0 && hRate > 0) (hHours * hRate).toLong() else 0L
+
+                    val otHours = if (att != null && att.overtimeHours > 0) att.overtimeHours else worker.overtimeHours
+                    val otRate = if (att != null && att.overtimeRate > 0) att.overtimeRate else worker.overtimeRate
+                    totalOtHours += otHours
+                    totalOtPay += if (otHours > 0) {
+                        if (otRate > 0) (otHours * otRate).toLong()
+                        else if (att != null && att.hourlyWage > 0) (otHours * att.hourlyWage * 1.4).toLong()
+                        else 0L
+                    } else 0L
+
+                    totalBonuses += (att?.bonus ?: 0L)
+                    val regHours = if (att != null) att.regularHours else (if (isHalfDay) 4.0 else 8.0)
+                    totalHours += (regHours + hHours + otHours)
+                    if (att != null) totalEarlyMins += att.earlyDepartureMinutes
+
+                    val transit = if (worker.transitImpact == "ALLOWANCE") worker.transitAllowance else -worker.transitAllowance
+                    val accom = if (worker.accommodationImpact == "ALLOWANCE") worker.accommodationAllowance else -worker.accommodationAllowance
+                    val food = if (worker.foodImpact == "ALLOWANCE") worker.foodAllowance else -worker.foodAllowance
+                    val med = if (worker.medicalImpact == "ALLOWANCE") worker.medicalAllowance else -worker.medicalAllowance
+                    totalAllowancesNet += (transit + accom + food + med)
+                }
+            }
+        }
+
+        // Account for any remaining standalone attendance records
         for (att in attList) {
-            val worker = workerList.find { it.id == att.workerId }
-            totalHours += att.regularHours
-            totalEarlyMins += att.earlyDepartureMinutes
-            totalWages += att.dailyWage
-
-            val hRate = if (att.hourlyWageRate > 0) att.hourlyWageRate else (worker?.hourlyWageRate ?: 0L)
-            val hHours = if (att.hourlyHours > 0) att.hourlyHours else (worker?.hourlyHours ?: 0.0)
-            totalHourlyPaid += if (hHours > 0 && hRate > 0) (hHours * hRate).toLong() else 0L
-
-            val otHours = if (att.overtimeHours > 0) att.overtimeHours else (worker?.overtimeHours ?: 0.0)
-            val otRate = if (att.overtimeRate > 0) att.overtimeRate else (worker?.overtimeRate ?: 0L)
-            totalOtHours += otHours
-            totalOtPay += if (otHours > 0) {
-                if (otRate > 0) (otHours * otRate).toLong()
-                else if (att.hourlyWage > 0) (otHours * att.hourlyWage * 1.4).toLong()
-                else 0L
-            } else 0L
-
-            totalBonuses += att.bonus
+            if (att.id !in processedAttIds) {
+                val worker = workerList.find { it.id == att.workerId }
+                val isAbsent = (att.regularHours == 0.0 || att.notes == "غیبت")
+                if (!isAbsent) {
+                    totalWages += att.dailyWage
+                    totalHours += att.regularHours
+                    totalEarlyMins += att.earlyDepartureMinutes
+                    val hRate = if (att.hourlyWageRate > 0) att.hourlyWageRate else (worker?.hourlyWageRate ?: 0L)
+                    val hHours = if (att.hourlyHours > 0) att.hourlyHours else (worker?.hourlyHours ?: 0.0)
+                    totalHourlyPaid += if (hHours > 0 && hRate > 0) (hHours * hRate).toLong() else 0L
+                    val otHours = if (att.overtimeHours > 0) att.overtimeHours else (worker?.overtimeHours ?: 0.0)
+                    val otRate = if (att.overtimeRate > 0) att.overtimeRate else (worker?.overtimeRate ?: 0L)
+                    totalOtHours += otHours
+                    totalOtPay += if (otHours > 0 && otRate > 0) (otHours * otRate).toLong() else 0L
+                    totalBonuses += att.bonus
+                }
+            }
         }
 
         var transitTotal = 0L
@@ -250,7 +368,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val totalExpenses = transitTotal + accTotal + foodTotal + medicalTotal + otherTotal
-        val grandTotalCost = totalWages + totalHourlyPaid + totalOtPay + totalBonuses + totalExpenses
+        val grandTotalCost = (totalWages + totalHourlyPaid + totalOtPay + totalBonuses + totalAllowancesNet + totalExpenses).coerceAtLeast(0L)
 
         DashboardAnalytics(
             totalWorkersCount = workerList.size,
@@ -497,6 +615,65 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     // Worker Actions
+    fun addWorkerWithDate(
+        worker: WorkerEntity,
+        workDate: String,
+        dayOfWeek: String,
+        title: String = "شیفت کاری"
+    ) {
+        val folder = currentFolder.value ?: return
+        viewModelScope.launch {
+            val existingDf = repository.getDateFolderByDate(folder.id, workDate)
+            val dateFolder = if (existingDf != null) {
+                existingDf
+            } else {
+                val newDfId = repository.insertDateFolder(
+                    DateFolderEntity(
+                        folderId = folder.id,
+                        date = workDate,
+                        dayOfWeek = dayOfWeek,
+                        title = title
+                    )
+                )
+                DateFolderEntity(
+                    id = newDfId,
+                    folderId = folder.id,
+                    date = workDate,
+                    dayOfWeek = dayOfWeek,
+                    title = title
+                )
+            }
+            selectedDateFolder.value = dateFolder
+
+            val finalWorker = worker.copy(
+                folderId = folder.id,
+                dateFolderId = dateFolder.id,
+                workDate = workDate,
+                dayOfWeek = dayOfWeek
+            )
+            val workerId = repository.insertWorker(finalWorker)
+
+            repository.insertAttendance(
+                AttendanceEntity(
+                    folderId = folder.id,
+                    workerId = workerId,
+                    date = workDate,
+                    dailyWage = finalWorker.baseDailyWage,
+                    hourlyWage = if (finalWorker.hourlyWageRate > 0) finalWorker.hourlyWageRate else finalWorker.baseHourlyWage,
+                    hourlyWageRate = finalWorker.hourlyWageRate,
+                    hourlyHours = finalWorker.hourlyHours,
+                    overtimeHours = finalWorker.overtimeHours,
+                    overtimeRate = finalWorker.overtimeRate,
+                    workplaceName = folder.name,
+                    foremanName = folder.foremanName,
+                    employerName = folder.employerName,
+                    regularHours = 8.0,
+                    notes = "تمام روز"
+                )
+            )
+        }
+    }
+
     fun addWorker(worker: WorkerEntity) {
         val folder = currentFolder.value ?: return
         val activeDateFolder = selectedDateFolder.value
@@ -525,10 +702,53 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                         workplaceName = folder.name,
                         foremanName = folder.foremanName,
                         employerName = folder.employerName,
-                        notes = "حاضر"
+                        notes = "تمام روز"
                     )
                 )
             }
+        }
+    }
+
+    fun duplicateWorker(
+        worker: WorkerEntity,
+        targetDate: String? = null,
+        targetDateFolderId: Long? = null,
+        targetDayOfWeek: String? = null
+    ) {
+        val folder = currentFolder.value ?: return
+        val date = targetDate ?: worker.workDate.ifBlank { JalaliCalendar.todayString() }
+        val dow = targetDayOfWeek ?: worker.dayOfWeek.ifBlank { JalaliCalendar.getDayOfWeek(date) }
+        val dfId = targetDateFolderId ?: worker.dateFolderId
+
+        viewModelScope.launch {
+            val duplicated = worker.copy(
+                id = 0,
+                name = "${worker.name} (کپی)",
+                folderId = folder.id,
+                dateFolderId = dfId,
+                workDate = date,
+                dayOfWeek = dow
+            )
+            val newWorkerId = repository.insertWorker(duplicated)
+
+            repository.insertAttendance(
+                AttendanceEntity(
+                    folderId = folder.id,
+                    workerId = newWorkerId,
+                    date = date,
+                    dailyWage = duplicated.baseDailyWage,
+                    hourlyWage = if (duplicated.hourlyWageRate > 0) duplicated.hourlyWageRate else duplicated.baseHourlyWage,
+                    hourlyWageRate = duplicated.hourlyWageRate,
+                    hourlyHours = duplicated.hourlyHours,
+                    overtimeHours = duplicated.overtimeHours,
+                    overtimeRate = duplicated.overtimeRate,
+                    workplaceName = folder.name,
+                    foremanName = folder.foremanName,
+                    employerName = folder.employerName,
+                    regularHours = 8.0,
+                    notes = "تمام روز"
+                )
+            )
         }
     }
 
@@ -594,7 +814,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     hourlyHours = worker.hourlyHours,
                                     overtimeHours = worker.overtimeHours,
                                     overtimeRate = worker.overtimeRate,
-                                    notes = "حاضر"
+                                    notes = "تمام روز"
                                 )
                             )
                         }
@@ -652,7 +872,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                 workplaceName = folder.name,
                                 foremanName = folder.foremanName,
                                 employerName = folder.employerName,
-                                notes = "حاضر"
+                                notes = "تمام روز"
                             )
                         )
                     }

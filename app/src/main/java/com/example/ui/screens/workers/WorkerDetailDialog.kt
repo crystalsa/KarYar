@@ -189,7 +189,7 @@ fun WorkerDetailDialog(
                             val attStatusText = when {
                                 isAbsent -> "غیبت"
                                 isHalfDay -> "نصف روز (۴ ساعت)"
-                                isFullDay -> "حاضر (روز کامل)"
+                                isFullDay -> "تمام روز (۸ ساعت)"
                                 else -> "ثبت شده"
                             }
                             val attStatusColor = when {

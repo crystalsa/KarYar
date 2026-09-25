@@ -101,7 +101,7 @@ fun AddEditFolderDialog(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = if (initialFolder == null) "ایجاد پوشه محل کار جدید" else "ویرایش پوشه کارگاه",
+                            text = if (initialFolder == null) "پوشه جدید" else "ویرایش پوشه",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.5.sp,
@@ -119,8 +119,8 @@ fun AddEditFolderDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("نام محل کار / پروژه (پوشه)", fontSize = 12.sp) },
-                    placeholder = { Text("مثلاً پروژه برج سپهر", fontSize = 11.sp) },
+                    label = { Text("نام کارگاه / پروژه", fontSize = 12.sp) },
+                    placeholder = { Text("مثلاً برج سپهر", fontSize = 11.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Business, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
                     },
@@ -132,11 +132,11 @@ fun AddEditFolderDialog(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Foreman Name (REQUIRED TO BE WRITTEN DIRECTLY UNDER WORKPLACE)
+                // Foreman Name
                 OutlinedTextField(
                     value = foremanName,
                     onValueChange = { foremanName = it },
-                    label = { Text("نام سرکارگر (نمایش زیر محل کار)", fontSize = 12.sp) },
+                    label = { Text("نام سرکارگر", fontSize = 12.sp) },
                     placeholder = { Text("مثلاً حاج اصغر کریمی", fontSize = 11.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Engineering, contentDescription = null, tint = EmeraldAccent, modifier = Modifier.size(16.dp))
@@ -168,7 +168,7 @@ fun AddEditFolderDialog(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("توضیحات و مشخصات کارگاه", fontSize = 12.sp) },
+                    label = { Text("توضیحات", fontSize = 12.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Description, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                     },
@@ -224,7 +224,7 @@ fun AddEditFolderDialog(
                         height = 40.dp
                     )
                     LoadingButton(
-                        text = if (initialFolder == null) "ایجاد پوشه" else "ذخیره تغییرات",
+                        text = if (initialFolder == null) "ایجاد" else "ذخیره",
                         icon = Icons.Default.Folder,
                         onClick = {
                             if (name.isNotBlank()) {

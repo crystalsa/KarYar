@@ -1,7 +1,9 @@
 package com.example.ui.screens.attendance
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,16 +26,24 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,6 +77,7 @@ import com.example.ui.theme.Slate200
 import com.example.util.Formatters
 import com.example.util.JalaliCalendar
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AttendanceScreen(
     viewModel: WorkerViewModel,
@@ -78,9 +89,16 @@ fun AttendanceScreen(
     val allWorkers by viewModel.workers.collectAsState()
     val attendanceList by viewModel.attendanceList.collectAsState()
 
-    var isAddingDateFolder by remember { mutableStateOf(false) }
     var isAddingWorker by remember { mutableStateOf(false) }
     var editingWorker by remember { mutableStateOf<WorkerEntity?>(null) }
+    var deletingWorkerFromAttendance by remember { mutableStateOf<WorkerEntity?>(null) }
+    var copyingWorkerFromAttendance by remember { mutableStateOf<WorkerEntity?>(null) }
+    var isCreatingNextDay by remember { mutableStateOf(false) }
+
+    // Day Management States (Long-press to edit/delete)
+    var longPressedDateFolder by remember { mutableStateOf<DateFolderEntity?>(null) }
+    var editingDateFolder by remember { mutableStateOf<DateFolderEntity?>(null) }
+    var deletingDateFolder by remember { mutableStateOf<DateFolderEntity?>(null) }
 
     // Active day folder logic
     val activeDayFolder: DateFolderEntity? = selectedDateFolder ?: dateFolders.firstOrNull()
@@ -126,28 +144,50 @@ fun AttendanceScreen(
                             )
                         }
 
-                        // Add new date folder button
-                        LoadingButton(
-                            text = "روز جدید",
-                            icon = Icons.Default.Add,
-                            onClick = { isAddingDateFolder = true },
-                            containerColor = AmberAccent,
-                            height = 32.dp,
-                            fontSize = 11.sp
-                        )
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = AmberAccent,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { isCreatingNextDay = true }
+                                .testTag("create_next_day_button")
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Add,
+                                    contentDescription = "ساخت روز بعد",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "روز بعد",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
 
-                    // Date folder horizontal chips
-                    if (dateFolders.isEmpty()) {
+                    // Date folder horizontal chips (از راست به چپ)
+                    val sortedDateFolders = remember(dateFolders) {
+                        dateFolders.sortedWith(compareBy({ it.date }, { it.id }))
+                    }
+
+                    if (sortedDateFolders.isEmpty()) {
                         HairlineCard(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(10.dp),
                             backgroundColor = Slate100
                         ) {
                             Text(
-                                text = "هنوز پوشه روز کاری ایجاد نشده است. با دکمه «روز جدید» روزهای هفته را ثبت کنید.",
+                                text = "هنوز روز کاری ثبت نشده است",
                                 modifier = Modifier.padding(10.dp),
                                 fontSize = 11.5.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -160,14 +200,17 @@ fun AttendanceScreen(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            dateFolders.forEach { df ->
+                            sortedDateFolders.forEach { df ->
                                 val isSelected = (activeDayFolder?.id == df.id)
                                 Surface(
                                     shape = RoundedCornerShape(8.dp),
                                     color = if (isSelected) AmberAccent else Slate100,
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(8.dp))
-                                        .clickable { viewModel.selectDateFolder(df) }
+                                        .combinedClickable(
+                                            onClick = { viewModel.selectDateFolder(df) },
+                                            onLongClick = { longPressedDateFolder = df }
+                                        )
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
@@ -262,14 +305,14 @@ fun AttendanceScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    // 1. Full Day (حضور)
+                                    // 1. Full Day (تمام روز)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(38.dp),
+                                        modifier = Modifier.width(42.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
-                                            text = "حضور",
+                                            text = "تمام روز",
                                             fontSize = 9.5.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = EmeraldAccent
@@ -303,6 +346,9 @@ fun AttendanceScreen(
                                             color = RoseAccent
                                         )
                                     }
+
+                                    // Spacer for 3-dots menu button width
+                                    Spacer(modifier = Modifier.width(28.dp))
                                 }
                             }
 
@@ -362,7 +408,8 @@ fun AttendanceScreen(
                                             )
                                             val statusDetails = buildList {
                                                 add(worker.role)
-                                                if (isHalfDay) add("نصف روز")
+                                                if (isFullDay) add("تمام روز")
+                                                else if (isHalfDay) add("نصف روز")
                                                 else if (isAbsent) add("غایب")
                                                 if (hasHourly) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی")
                                                 if (hasOvertime) add("+${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))}س اضافه")
@@ -378,14 +425,14 @@ fun AttendanceScreen(
                                         }
                                     }
 
-                                    // Action Checkboxes: Full Day, Half Day, Absent
+                                    // Action Checkboxes: Full Day, Half Day, Absent + 3-dots Menu
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         // 1. Full Day Presence Checkbox
                                         Box(
-                                            modifier = Modifier.width(38.dp),
+                                            modifier = Modifier.width(42.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
@@ -439,11 +486,134 @@ fun AttendanceScreen(
                                                 modifier = Modifier.size(24.dp)
                                             )
                                         }
+
+                                        // 3-dots Menu Button (سه نقطه با گزینه حذف و کپی)
+                                        var menuExpanded by remember { mutableStateOf(false) }
+                                        Box(
+                                            modifier = Modifier.width(28.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            IconButton(
+                                                onClick = { menuExpanded = true },
+                                                modifier = Modifier
+                                                    .size(26.dp)
+                                                    .testTag("worker_menu_${worker.id}")
+                                            ) {
+                                                Icon(
+                                                    Icons.Default.MoreVert,
+                                                    contentDescription = "گزینه‌های کارگر",
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(17.dp)
+                                                )
+                                            }
+
+                                            DropdownMenu(
+                                                expanded = menuExpanded,
+                                                onDismissRequest = { menuExpanded = false }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            text = "کپی",
+                                                            fontSize = 12.5.sp,
+                                                            fontWeight = FontWeight.Medium
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            Icons.Default.ContentCopy,
+                                                            contentDescription = null,
+                                                            tint = AmberAccent,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        copyingWorkerFromAttendance = worker
+                                                    }
+                                                )
+
+                                                DropdownMenuItem(
+                                                    text = {
+                                                        Text(
+                                                            text = "حذف",
+                                                            fontSize = 12.5.sp,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = RoseAccent
+                                                        )
+                                                    },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            Icons.Default.Delete,
+                                                            contentDescription = null,
+                                                            tint = RoseAccent,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        deletingWorkerFromAttendance = worker
+                                                    }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 HorizontalDivider(
                                     thickness = 0.5.dp,
                                     color = Slate200.copy(alpha = 0.5f)
+                                )
+                            }
+
+                            // مجموع پرداختی روز: محاسبه دقیق با لحاظ نصف‌روز، غیبت، و کم و زیاد شدن ایاب و ذهاب، مسکن و غیره
+                            val dayTotalPayout = dayWorkers.sumOf { worker ->
+                                val att = attendanceList.firstOrNull { it.workerId == worker.id && it.date == targetDate }
+                                val isAbsent = (att != null && (att.regularHours == 0.0 || att.notes == "غیبت"))
+                                val isHalfDay = (att != null && (att.regularHours == 4.0 || att.notes == "نصف روز"))
+                                if (isAbsent) {
+                                    0L
+                                } else {
+                                    val baseWage = when {
+                                        isHalfDay -> if (att?.dailyWage != null && att.dailyWage > 0) att.dailyWage else worker.baseDailyWage / 2
+                                        att != null && att.dailyWage > 0 -> att.dailyWage
+                                        else -> worker.baseDailyWage
+                                    }
+                                    val hHours = if (att != null && att.hourlyHours > 0) att.hourlyHours else worker.hourlyHours
+                                    val hRate = if (att != null && att.hourlyWageRate > 0) att.hourlyWageRate else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)
+                                    val hourlyPay = (hHours * hRate).toLong()
+
+                                    val otHours = if (att != null && att.overtimeHours > 0) att.overtimeHours else worker.overtimeHours
+                                    val otRate = if (att != null && att.overtimeRate > 0) att.overtimeRate else worker.overtimeRate
+                                    val otPay = (otHours * otRate).toLong()
+
+                                    val transit = if (worker.transitImpact == "ALLOWANCE") worker.transitAllowance else -worker.transitAllowance
+                                    val accom = if (worker.accommodationImpact == "ALLOWANCE") worker.accommodationAllowance else -worker.accommodationAllowance
+                                    val food = if (worker.foodImpact == "ALLOWANCE") worker.foodAllowance else -worker.foodAllowance
+                                    val med = if (worker.medicalImpact == "ALLOWANCE") worker.medicalAllowance else -worker.medicalAllowance
+
+                                    (baseWage + hourlyPay + otPay + transit + accom + food + med).coerceAtLeast(0L)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(thickness = 0.8.dp, color = Slate200)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "مجموع پرداختی روز:",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = Formatters.formatCurrency(dayTotalPayout),
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldAccent
                                 )
                             }
                         }
@@ -462,36 +632,23 @@ fun AttendanceScreen(
             containerColor = AmberAccent,
             contentColor = Color.White
         ) {
-            Icon(Icons.Default.PersonAdd, contentDescription = "افزودن کارگر به این روز")
+            Icon(Icons.Default.PersonAdd, contentDescription = "افزودن کارگر")
         }
     }
 
-    // Dialog: Add new date/day folder
-    if (isAddingDateFolder) {
-        AddEditDateFolderDialog(
-            initialDateFolder = null,
-            onDismiss = { isAddingDateFolder = false },
-            onConfirm = { date, dayOfWeek, title ->
-                viewModel.addDateFolder(date, dayOfWeek, title)
-                isAddingDateFolder = false
-            }
-        )
-    }
-
-    // Dialog: Add new worker using identical AddEditWorkerDialog as Workers screen
+    // Dialog: Add new worker using AddEditWorkerDialog with auto-created date folder
     if (isAddingWorker) {
-        val currentWorkplace = folder
         AddEditWorkerDialog(
             initialWorker = null,
+            initialDate = activeDayFolder?.date ?: JalaliCalendar.todayString(),
+            initialDayOfWeek = activeDayFolder?.dayOfWeek ?: JalaliCalendar.getDayOfWeek(activeDayFolder?.date ?: JalaliCalendar.todayString()),
             onDismiss = { isAddingWorker = false },
             onConfirm = { newWorker ->
-                val workerToAdd = newWorker.copy(
-                    folderId = currentWorkplace?.id ?: 0L,
-                    dateFolderId = activeDayFolder?.id ?: 0L,
-                    workDate = targetDate,
-                    dayOfWeek = activeDayFolder?.dayOfWeek ?: ""
+                viewModel.addWorkerWithDate(
+                    worker = newWorker,
+                    workDate = newWorker.workDate.ifBlank { JalaliCalendar.todayString() },
+                    dayOfWeek = newWorker.dayOfWeek.ifBlank { JalaliCalendar.getDayOfWeek(newWorker.workDate.ifBlank { JalaliCalendar.todayString() }) }
                 )
-                viewModel.addWorker(workerToAdd)
                 isAddingWorker = false
             }
         )
@@ -505,6 +662,164 @@ fun AttendanceScreen(
             onConfirm = { updatedWorker ->
                 viewModel.updateWorker(updatedWorker)
                 editingWorker = null
+            }
+        )
+    }
+
+    // Dialog: Create Next Day
+    if (isCreatingNextDay) {
+        val baseDateForNext = dateFolders.lastOrNull()?.date ?: activeDayFolder?.date
+        CreateNextDayDialog(
+            baseDate = baseDateForNext,
+            onDismiss = { isCreatingNextDay = false },
+            onConfirm = { date, dayOfWeek ->
+                viewModel.addDateFolder(
+                    date = date,
+                    dayOfWeek = dayOfWeek,
+                    title = "شیفت کاری"
+                )
+                isCreatingNextDay = false
+            }
+        )
+    }
+
+    // Dialog: Long-press Day Options (ویرایش و حذف روز)
+    if (longPressedDateFolder != null) {
+        DayActionOptionsDialog(
+            dateFolder = longPressedDateFolder!!,
+            onDismiss = { longPressedDateFolder = null },
+            onEdit = {
+                editingDateFolder = longPressedDateFolder
+                longPressedDateFolder = null
+            },
+            onDelete = {
+                deletingDateFolder = longPressedDateFolder
+                longPressedDateFolder = null
+            }
+        )
+    }
+
+    // Dialog: Edit Day
+    if (editingDateFolder != null) {
+        EditDateFolderDialog(
+            dateFolder = editingDateFolder!!,
+            onDismiss = { editingDateFolder = null },
+            onConfirm = { date, dayOfWeek, title ->
+                viewModel.updateDateFolder(
+                    editingDateFolder!!.copy(
+                        date = date,
+                        dayOfWeek = dayOfWeek,
+                        title = title
+                    )
+                )
+                editingDateFolder = null
+            }
+        )
+    }
+
+    // Dialog: Delete Day Confirmation
+    if (deletingDateFolder != null) {
+        DeleteDayConfirmDialog(
+            dateFolder = deletingDateFolder!!,
+            onDismiss = { deletingDateFolder = null },
+            onConfirm = {
+                deletingDateFolder?.let { viewModel.deleteDateFolder(it) }
+                deletingDateFolder = null
+            }
+        )
+    }
+
+    // Dialog: Delete Worker Confirmation (با دو گزینه حذف و انصراف و کلمه حذف قرمز رنگ)
+    if (deletingWorkerFromAttendance != null) {
+        val workerToDelete = deletingWorkerFromAttendance!!
+        AlertDialog(
+            onDismissRequest = { deletingWorkerFromAttendance = null },
+            title = {
+                Text(
+                    text = "حذف",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "آیا از حذف «${workerToDelete.name}» اطمینان دارید؟",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteWorker(workerToDelete)
+                        deletingWorkerFromAttendance = null
+                    }
+                ) {
+                    Text(
+                        text = "حذف",
+                        color = RoseAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingWorkerFromAttendance = null }) {
+                    Text(
+                        text = "انصراف",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        )
+    }
+
+    // Dialog: Copy Worker Confirmation (تکثیر کارگر با دو گزینه تکثیر و انصراف)
+    if (copyingWorkerFromAttendance != null) {
+        val workerToCopy = copyingWorkerFromAttendance!!
+        AlertDialog(
+            onDismissRequest = { copyingWorkerFromAttendance = null },
+            title = {
+                Text(
+                    text = "تکثیر",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp
+                )
+            },
+            text = {
+                Text(
+                    text = "آیا از تکثیر «${workerToCopy.name}» اطمینان دارید؟",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.duplicateWorker(
+                            worker = workerToCopy,
+                            targetDate = targetDate,
+                            targetDateFolderId = activeDayFolder?.id,
+                            targetDayOfWeek = activeDayFolder?.dayOfWeek
+                        )
+                        copyingWorkerFromAttendance = null
+                    }
+                ) {
+                    Text(
+                        text = "تکثیر",
+                        color = AmberAccent,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { copyingWorkerFromAttendance = null }) {
+                    Text(
+                        text = "انصراف",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         )
     }

@@ -45,6 +45,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +54,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.entity.DateFolderEntity
 import com.example.ui.WorkerViewModel
 import com.example.ui.components.GlowStatCard
 import com.example.ui.components.HairlineCard
@@ -83,6 +85,7 @@ fun DashboardScreen(
     val recentAttendance by viewModel.attendanceList.collectAsState()
     val dailyBookkeeping by viewModel.dailyBookkeeping.collectAsState()
     val selectedDailyDate by viewModel.selectedDailyDate.collectAsState()
+    val dateFolders by viewModel.dateFolders.collectAsState()
 
     // 1. When app starts fresh without any folder selected:
     // User requested: "صفحه اول کار وقتی شروع میشه باید خالی باشه"
@@ -188,12 +191,11 @@ fun DashboardScreen(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Date navigation chips
+                    // Date navigation chips - synchronized with dateFolders
                     val todayStr = JalaliCalendar.todayString()
-                    val todayJalali = JalaliCalendar.today()
-                    // Calculate yesterday
-                    val yesterdayDay = if (todayJalali.day > 1) todayJalali.day - 1 else 1
-                    val yesterdayStr = String.format("%04d/%02d/%02d", todayJalali.year, todayJalali.month, yesterdayDay)
+                    val sortedDateFolders = remember(dateFolders) {
+                        dateFolders.sortedWith(compareBy({ it.date }, { it.id }))
+                    }
 
                     Row(
                         modifier = Modifier
@@ -201,36 +203,58 @@ fun DashboardScreen(
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedDailyDate == todayStr) AmberAccent else Slate100,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectDailyDate(todayStr) }
-                        ) {
-                            Text(
-                                text = "امروز (${Formatters.toPersianDigits(todayStr)})",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                fontSize = 11.sp,
-                                color = if (selectedDailyDate == todayStr) Color.White else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (selectedDailyDate == todayStr) FontWeight.Bold else FontWeight.Normal
-                            )
+                        // All Date Folders (روزهای کاری تعریف‌شده در پروژه)
+                        sortedDateFolders.forEach { df ->
+                            val isSelected = (selectedDailyDate == df.date)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) AmberAccent else Slate100,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable {
+                                        viewModel.selectDailyDate(df.date)
+                                        viewModel.selectDateFolder(df)
+                                    }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = df.dayOfWeek,
+                                        fontSize = 11.sp,
+                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = Formatters.toPersianDigits(df.date),
+                                        fontSize = 10.5.sp,
+                                        color = if (isSelected) Color.White.copy(alpha = 0.95f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                            }
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = if (selectedDailyDate == yesterdayStr) AmberAccent else Slate100,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { viewModel.selectDailyDate(yesterdayStr) }
-                        ) {
-                            Text(
-                                text = "دیروز",
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                fontSize = 11.sp,
-                                color = if (selectedDailyDate == yesterdayStr) Color.White else MaterialTheme.colorScheme.onSurface,
-                                fontWeight = if (selectedDailyDate == yesterdayStr) FontWeight.Bold else FontWeight.Normal
-                            )
+                        // If today is not in sortedDateFolders, show today chip
+                        if (sortedDateFolders.none { it.date == todayStr }) {
+                            val isSelected = (selectedDailyDate == todayStr)
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isSelected) AmberAccent else Slate100,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { viewModel.selectDailyDate(todayStr) }
+                            ) {
+                                Text(
+                                    text = "امروز (${Formatters.toPersianDigits(todayStr)})",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                    fontSize = 11.sp,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
 
@@ -405,6 +429,30 @@ fun DashboardScreen(
                             subtitle = "${Formatters.toPersianDigits(analytics.activeWorkersCount)} نفر شاغل و فعال",
                             icon = Icons.Default.People,
                             accentColor = CyanAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        GlowStatCard(
+                            title = "کل روزهای کاری",
+                            value = "${Formatters.toPersianDigits(dateFolders.size)} روز",
+                            subtitle = "روزهای ثبت‌شده در پروژه",
+                            icon = Icons.Default.CalendarMonth,
+                            accentColor = EmeraldAccent,
+                            modifier = Modifier.weight(1f)
+                        )
+                        GlowStatCard(
+                            title = "مجموع دستمزدها",
+                            value = Formatters.formatCurrency(analytics.totalWagesPaid + analytics.totalHourlyPaid + analytics.totalOvertimePaid + analytics.totalBonusesPaid),
+                            subtitle = "مجموع پرداختی تمام روزها",
+                            icon = Icons.Default.AttachMoney,
+                            accentColor = IndigoAccent,
                             modifier = Modifier.weight(1f)
                         )
                     }

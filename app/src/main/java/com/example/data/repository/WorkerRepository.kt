@@ -33,6 +33,7 @@ class WorkerRepository(
 
     suspend fun insertDateFolder(dateFolder: DateFolderEntity): Long = dateFolderDao.insertDateFolder(dateFolder)
     suspend fun updateDateFolder(dateFolder: DateFolderEntity) = dateFolderDao.updateDateFolder(dateFolder)
+    suspend fun getDateFolderByDate(folderId: Long, date: String): DateFolderEntity? = dateFolderDao.getDateFolderByDate(folderId, date)
     suspend fun deleteDateFolder(dateFolder: DateFolderEntity) {
         dateFolderDao.deleteDateFolder(dateFolder)
         workerDao.deleteWorkersByDateFolder(dateFolder.id)
