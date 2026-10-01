@@ -176,52 +176,21 @@ fun WorkersScreen(
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconicsBox(
-                                icon = Icons.Default.CalendarMonth,
-                                color = AmberAccent,
-                                size = IconicsSize.SMALL
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "روزهای کاری",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
+                        IconicsBox(
+                            icon = Icons.Default.CalendarMonth,
                             color = AmberAccent,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable { isCreatingNextDay = true }
-                                .testTag("create_next_day_button_workers")
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    Icons.Default.Add,
-                                    contentDescription = "ساخت روز بعد",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "روز بعد",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                            }
-                        }
+                            size = IconicsSize.SMALL
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "روزهای کاری",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
@@ -477,8 +446,7 @@ fun WorkersScreen(
                                     .clip(RoundedCornerShape(12.dp))
                                     .clickable { isDashboardExpanded = !isDashboardExpanded },
                                 shape = RoundedCornerShape(12.dp),
-                                color = EmeraldAccent.copy(alpha = 0.12f),
-                                border = BorderStroke(1.dp, EmeraldAccent.copy(alpha = 0.35f))
+                                color = EmeraldAccent.copy(alpha = 0.12f)
                             ) {
                                 Row(
                                     modifier = Modifier
@@ -1226,14 +1194,50 @@ private fun WorkerItemCard(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = worker.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.5.sp,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = worker.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.5.sp,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            val nameTagText = when {
+                                isAbsent -> "غایب"
+                                isHourly -> {
+                                    val hHours = if (attendance != null && attendance.hourlyHours > 0) attendance.hourlyHours
+                                                 else (if (worker.hourlyHours > 0) worker.hourlyHours else 0.0)
+                                    if (hHours > 0) "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی" else "ساعتی"
+                                }
+                                isHalfDay -> "نصف روز"
+                                isFullDay -> "تمام روز"
+                                else -> "تمام روز"
+                            }
+                            val nameTagColor = when {
+                                isAbsent -> RoseAccent
+                                isHourly -> CyanAccent
+                                isHalfDay -> AmberAccent
+                                else -> EmeraldAccent
+                            }
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = nameTagColor.copy(alpha = 0.12f),
+                                border = BorderStroke(0.5.dp, nameTagColor.copy(alpha = 0.35f))
+                            ) {
+                                Text(
+                                    text = nameTagText,
+                                    fontSize = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = nameTagColor,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
+                                )
+                            }
+                        }
                         Text(
                             text = worker.role,
                             fontSize = 11.sp,
