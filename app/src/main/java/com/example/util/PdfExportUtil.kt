@@ -74,7 +74,7 @@ object PdfExportUtil {
         paint.color = Color.WHITE
         paint.textSize = 18f
         paint.isFakeBoldText = true
-        canvas.drawText("گزارش جامع عملکرد، حضور و غیاب و هزینه‌های کارگران", 30f, 40f, paint)
+        canvas.drawText("گزارش جامع عملکرد، حضور و غیاب و تسویه کارگران", 30f, 40f, paint)
 
         // Header Subtitle
         paint.color = Color.parseColor("#94A3B8")
@@ -95,15 +95,14 @@ object PdfExportUtil {
         canvas.drawText("سرکارگر: $foremanName", 220f, 135f, paint)
         canvas.drawText("تعداد کارگران: ${analytics.activeWorkersCount} نفر فعال", 390f, 135f, paint)
 
-        // 3. Financial Summary 4 Cards
-        val cardWidth = 125f
+        // 3. Financial Summary 3 Cards
+        val cardWidth = 170f
         val cardHeight = 55f
         val startY = 170f
 
-        drawStatCard(canvas, 30f, startY, cardWidth, cardHeight, "مجموع دستمزد", Formatters.formatCurrency(analytics.totalWagesPaid), "#10B981")
-        drawStatCard(canvas, 168f, startY, cardWidth, cardHeight, "اضافه کاری و پاداش", Formatters.formatCurrency(analytics.totalOvertimePaid + analytics.totalBonusesPaid), "#F59E0B")
-        drawStatCard(canvas, 306f, startY, cardWidth, cardHeight, "مجموع هزینه‌ها", Formatters.formatCurrency(analytics.grandTotalExpenses), "#EF4444")
-        drawStatCard(canvas, 444f, startY, cardWidth, cardHeight, "هزینه کل پروژه", Formatters.formatCurrency(analytics.grandTotalProjectCost), "#6366F1")
+        drawStatCard(canvas, 30f, startY, cardWidth, cardHeight, "مجموع دستمزد پایه", Formatters.formatCurrency(analytics.totalWagesPaid), "#10B981")
+        drawStatCard(canvas, 212f, startY, cardWidth, cardHeight, "اضافه کاری و ساعتی", Formatters.formatCurrency(analytics.totalOvertimePaid + analytics.totalHourlyPaid), "#F59E0B")
+        drawStatCard(canvas, 395f, startY, cardWidth, cardHeight, "کل پرداختی کارگاه", Formatters.formatCurrency(analytics.grandTotalProjectCost), "#6366F1")
 
         // 4. Section Title: Workers Performance Table
         paint.color = Color.parseColor("#0F172A")
@@ -120,11 +119,10 @@ object PdfExportUtil {
         paint.isFakeBoldText = true
 
         canvas.drawText("ردیف", 35f, 283f, paint)
-        canvas.drawText("نام کارگر", 70f, 283f, paint)
-        canvas.drawText("تخصص / شغل", 180f, 283f, paint)
-        canvas.drawText("شیفت / ساعت", 270f, 283f, paint)
-        canvas.drawText("اضافه کاری", 345f, 283f, paint)
-        canvas.drawText("هزینه تکی", 410f, 283f, paint)
+        canvas.drawText("نام کارگر", 75f, 283f, paint)
+        canvas.drawText("تخصص / شغل", 190f, 283f, paint)
+        canvas.drawText("روز / ساعت", 300f, 283f, paint)
+        canvas.drawText("اضافه کاری", 390f, 283f, paint)
         canvas.drawText("خالص دریافتی", 485f, 283f, paint)
 
         // Table Rows
@@ -139,11 +137,10 @@ object PdfExportUtil {
             paint.color = Color.parseColor("#1E293B")
             paint.textSize = 9f
             canvas.drawText("${index + 1}", 38f, rowY, paint)
-            canvas.drawText(p.worker.name, 70f, rowY, paint)
-            canvas.drawText(p.worker.role, 180f, rowY, paint)
-            canvas.drawText("${p.totalShifts} شیفت (${p.regularHours}h)", 270f, rowY, paint)
-            canvas.drawText("${p.overtimeHours}h", 350f, rowY, paint)
-            canvas.drawText(Formatters.formatCurrency(p.individualExpensesTotal, ""), 410f, rowY, paint)
+            canvas.drawText(p.worker.name, 75f, rowY, paint)
+            canvas.drawText(p.worker.role, 190f, rowY, paint)
+            canvas.drawText("${p.totalShifts} روز (${p.regularHours}h)", 300f, rowY, paint)
+            canvas.drawText("${p.overtimeHours}h", 390f, rowY, paint)
 
             paint.color = Color.parseColor("#047857")
             paint.isFakeBoldText = true
@@ -156,26 +153,23 @@ object PdfExportUtil {
         // 5. Cost Distribution Breakdown Box
         rowY += 15f
         paint.color = Color.parseColor("#F8FAFC")
-        val expBox = RectF(30f, rowY, 565f, rowY + 95f)
+        val expBox = RectF(30f, rowY, 565f, rowY + 80f)
         canvas.drawRoundRect(expBox, 8f, 8f, paint)
 
         paint.color = Color.parseColor("#0F172A")
         paint.textSize = 11f
         paint.isFakeBoldText = true
-        canvas.drawText("تفکیک هزینه‌های کارگاه (جمعی و تکی):", 45f, rowY + 22f, paint)
+        canvas.drawText("خلاصه وضعیت کارکرد پرسنل کارگاه:", 45f, rowY + 22f, paint)
 
         paint.color = Color.parseColor("#475569")
         paint.textSize = 9.5f
         paint.isFakeBoldText = false
 
-        canvas.drawText("• ایاب و ذهاب: ${Formatters.formatCurrency(analytics.totalTransitExpenses)}", 45f, rowY + 45f, paint)
-        canvas.drawText("• اسکان (${analytics.totalAccommodationDays} روز): ${Formatters.formatCurrency(analytics.totalAccommodationExpenses)}", 45f, rowY + 68f, paint)
+        canvas.drawText("• کل کارکرد ثبت‌شده: ${analytics.totalWorkHours} ساعت", 45f, rowY + 45f, paint)
+        canvas.drawText("• کل اضافه کاری ثبت‌شده: ${analytics.totalOvertimeHours} ساعت", 45f, rowY + 65f, paint)
 
-        canvas.drawText("• خوراک و پذیرایی: ${Formatters.formatCurrency(analytics.totalFoodExpenses)}", 260f, rowY + 45f, paint)
-        canvas.drawText("• درمان و بهداشت: ${Formatters.formatCurrency(analytics.totalMedicalExpenses)}", 260f, rowY + 68f, paint)
-
-        canvas.drawText("• هزینه‌های جمعی: ${Formatters.formatCurrency(analytics.totalGroupExpenses)}", 430f, rowY + 45f, paint)
-        canvas.drawText("• هزینه‌های تکی: ${Formatters.formatCurrency(analytics.totalIndividualExpenses)}", 430f, rowY + 68f, paint)
+        canvas.drawText("• تعداد کارگران فعال: ${analytics.activeWorkersCount} نفر", 280f, rowY + 45f, paint)
+        canvas.drawText("• مجموع روزهای کاری ثبت‌شده: ${analytics.todayAttendanceCount} رکورد تردد", 280f, rowY + 65f, paint)
 
         // 6. Signature Lines at bottom
         val sigY = 760f

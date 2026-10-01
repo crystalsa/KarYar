@@ -170,10 +170,10 @@ class WorkerRepository(
                 phone = "09121112233",
                 nationalId = "0012345678",
                 baseDailyWage = 1200000L,
-                baseHourlyWage = 150000L,
-                isHourlyEnabled = true,
-                hourlyWageRate = 150000L,
-                hourlyHours = 2.0,
+                baseHourlyWage = 0L,
+                isHourlyEnabled = false,
+                hourlyWageRate = 0L,
+                hourlyHours = 0.0,
                 isOvertimeEnabled = true,
                 overtimeRate = 180000L,
                 overtimeHours = 2.0,
@@ -195,11 +195,11 @@ class WorkerRepository(
                 role = "آرماتوربند",
                 phone = "09359876543",
                 nationalId = "0087654321",
-                baseDailyWage = 1100000L,
+                baseDailyWage = 0L,
                 baseHourlyWage = 140000L,
                 isHourlyEnabled = true,
                 hourlyWageRate = 140000L,
-                hourlyHours = 4.0,
+                hourlyHours = 5.0,
                 isOvertimeEnabled = true,
                 overtimeRate = 160000L,
                 overtimeHours = 1.5,
@@ -222,7 +222,7 @@ class WorkerRepository(
                 phone = "09194445566",
                 nationalId = "0441122334",
                 baseDailyWage = 800000L,
-                baseHourlyWage = 100000L,
+                baseHourlyWage = 0L,
                 isHourlyEnabled = false,
                 hourlyWageRate = 0L,
                 hourlyHours = 0.0,
@@ -245,11 +245,11 @@ class WorkerRepository(
                 role = "جوشکار اسکلت فلزی",
                 phone = "09123334455",
                 nationalId = "0055667788",
-                baseDailyWage = 1350000L,
+                baseDailyWage = 0L,
                 baseHourlyWage = 170000L,
                 isHourlyEnabled = true,
                 hourlyWageRate = 170000L,
-                hourlyHours = 3.0,
+                hourlyHours = 5.0,
                 isOvertimeEnabled = true,
                 overtimeRate = 200000L,
                 overtimeHours = 2.0,
@@ -272,10 +272,10 @@ class WorkerRepository(
                 phone = "09187778899",
                 nationalId = "0489988776",
                 baseDailyWage = 1250000L,
-                baseHourlyWage = 160000L,
-                isHourlyEnabled = true,
-                hourlyWageRate = 160000L,
-                hourlyHours = 2.5,
+                baseHourlyWage = 0L,
+                isHourlyEnabled = false,
+                hourlyWageRate = 0L,
+                hourlyHours = 0.0,
                 isOvertimeEnabled = true,
                 overtimeRate = 190000L,
                 overtimeHours = 1.0,
@@ -294,17 +294,16 @@ class WorkerRepository(
                 entryTime = "07:30",
                 exitTime = "18:00",
                 regularHours = 8.0,
-                hourlyHours = 2.0,
-                hourlyWageRate = 150000L,
+                hourlyHours = 0.0,
+                hourlyWageRate = 0L,
                 overtimeHours = 2.0,
                 overtimeRate = 180000L,
                 dailyWage = 1200000L,
-                hourlyWage = 150000L,
-                bonus = 100000L,
+                hourlyWage = 0L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "حاضر - اجرای عالی دیوارچینی"
+                notes = "تمام روز"
             )
         )
 
@@ -315,18 +314,17 @@ class WorkerRepository(
                 date = todayJalali,
                 entryTime = "08:00",
                 exitTime = "17:30",
-                regularHours = 8.0,
-                hourlyHours = 4.0,
+                regularHours = 0.0,
+                hourlyHours = 5.0,
                 hourlyWageRate = 140000L,
                 overtimeHours = 1.5,
                 overtimeRate = 160000L,
-                dailyWage = 1100000L,
+                dailyWage = 0L,
                 hourlyWage = 140000L,
-                bonus = 0L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "حاضر - تکمیل خاموت‌گذاری"
+                notes = "ساعتی"
             )
         )
 
@@ -343,12 +341,11 @@ class WorkerRepository(
                 overtimeHours = 3.0,
                 overtimeRate = 120000L,
                 dailyWage = 800000L,
-                hourlyWage = 100000L,
-                bonus = 50000L,
+                hourlyWage = 0L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "حاضر - همکاری در بارگیری و بتن‌ریزی"
+                notes = "تمام روز"
             )
         )
 
@@ -359,18 +356,17 @@ class WorkerRepository(
                 date = todayJalali,
                 entryTime = "08:00",
                 exitTime = "18:00",
-                regularHours = 8.0,
-                hourlyHours = 3.0,
+                regularHours = 0.0,
+                hourlyHours = 5.0,
                 hourlyWageRate = 170000L,
                 overtimeHours = 2.0,
                 overtimeRate = 200000L,
-                dailyWage = 1350000L,
+                dailyWage = 0L,
                 hourlyWage = 170000L,
-                bonus = 80000L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "حاضر - جوشکاری اتصالات بادبندها"
+                notes = "ساعتی"
             )
         )
 
@@ -382,83 +378,16 @@ class WorkerRepository(
                 entryTime = "08:30",
                 exitTime = "17:30",
                 regularHours = 8.0,
-                hourlyHours = 2.5,
-                hourlyWageRate = 160000L,
+                hourlyHours = 0.0,
+                hourlyWageRate = 0L,
                 overtimeHours = 1.0,
                 overtimeRate = 190000L,
                 dailyWage = 1250000L,
-                hourlyWage = 160000L,
-                bonus = 0L,
+                hourlyWage = 0L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "حاضر - نصب کلکتورهای آب سرد و گرم"
-            )
-        )
-
-        // Expenses for Workplace 1
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder1Id,
-                title = "کرایه سرویس مینی‌بوس کارگران",
-                category = "TRANSIT",
-                scope = "GROUP",
-                impactType = "DEDUCTION",
-                amount = 450000L,
-                date = todayJalali,
-                workplaceName = "پروژه برج سپهر",
-                employerName = "مهندس سعیدی",
-                foremanName = "حاج اصغر کریمی",
-                notes = "سرویس رفت و برگشت روزانه"
-            )
-        )
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder1Id,
-                title = "تهیه ناهار گرم پرسنل",
-                category = "FOOD",
-                scope = "GROUP",
-                impactType = "DEDUCTION",
-                amount = 680000L,
-                date = todayJalali,
-                workplaceName = "پروژه برج سپهر",
-                employerName = "مهندس سعیدی",
-                foremanName = "حاج اصغر کریمی",
-                notes = "ناهار روزانه با کیفیت"
-            )
-        )
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder1Id,
-                title = "کمک‌هزینه مسکن کارگر (افزایشی)",
-                category = "ACCOMMODATION",
-                scope = "INDIVIDUAL",
-                impactType = "ALLOWANCE",
-                workerId = w1Id,
-                workerName = "علی رضایی",
-                amount = 200000L,
-                date = todayJalali,
-                workplaceName = "پروژه برج سپهر",
-                employerName = "مهندس سعیدی",
-                foremanName = "حاج اصغر کریمی",
-                notes = "کمک‌هزینه اسکان"
-            )
-        )
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder1Id,
-                title = "کسر هزینه دارو و معاینه (کاهشی)",
-                category = "MEDICAL",
-                scope = "INDIVIDUAL",
-                impactType = "DEDUCTION",
-                workerId = w2Id,
-                workerName = "حسین مرادی",
-                amount = 150000L,
-                date = todayJalali,
-                workplaceName = "پروژه برج سپهر",
-                employerName = "مهندس سعیدی",
-                foremanName = "حاج اصغر کریمی",
-                notes = "ویزیت پزشک درمانگاه"
+                notes = "تمام روز"
             )
         )
 
@@ -482,7 +411,7 @@ class WorkerRepository(
                 folderId = folder2Id,
                 date = todayJalali,
                 dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
-                title = "شیفت روزانه",
+                title = "روز کاری",
                 notes = "کابل‌کشی تابلوهای برق اضطراری"
             )
         )
@@ -498,11 +427,11 @@ class WorkerRepository(
                 role = "تکنسین برق صنعتی",
                 phone = "09129998877",
                 nationalId = "0077889900",
-                baseDailyWage = 1400000L,
+                baseDailyWage = 0L,
                 baseHourlyWage = 180000L,
                 isHourlyEnabled = true,
                 hourlyWageRate = 180000L,
-                hourlyHours = 3.0,
+                hourlyHours = 6.0,
                 isOvertimeEnabled = true,
                 overtimeRate = 210000L,
                 overtimeHours = 2.0,
@@ -523,7 +452,7 @@ class WorkerRepository(
                 phone = "09361114477",
                 nationalId = "0066554433",
                 baseDailyWage = 1150000L,
-                baseHourlyWage = 145000L,
+                baseHourlyWage = 0L,
                 isHourlyEnabled = false,
                 hourlyWageRate = 0L,
                 hourlyHours = 0.0,
@@ -546,11 +475,11 @@ class WorkerRepository(
                 role = "نقاش ساختمان",
                 phone = "09192226688",
                 nationalId = "0044332211",
-                baseDailyWage = 1050000L,
+                baseDailyWage = 0L,
                 baseHourlyWage = 130000L,
                 isHourlyEnabled = true,
                 hourlyWageRate = 130000L,
-                hourlyHours = 4.0,
+                hourlyHours = 5.0,
                 isOvertimeEnabled = false,
                 overtimeRate = 0L,
                 overtimeHours = 0.0,
@@ -571,7 +500,7 @@ class WorkerRepository(
                 phone = "09128883344",
                 nationalId = "0033221199",
                 baseDailyWage = 1300000L,
-                baseHourlyWage = 160000L,
+                baseHourlyWage = 0L,
                 isHourlyEnabled = false,
                 hourlyWageRate = 0L,
                 hourlyHours = 0.0,
@@ -594,11 +523,11 @@ class WorkerRepository(
                 role = "نصاب درب ضدحریق و پنجره",
                 phone = "09375551122",
                 nationalId = "0022118877",
-                baseDailyWage = 950000L,
+                baseDailyWage = 0L,
                 baseHourlyWage = 120000L,
                 isHourlyEnabled = true,
                 hourlyWageRate = 120000L,
-                hourlyHours = 2.0,
+                hourlyHours = 4.0,
                 isOvertimeEnabled = false,
                 overtimeRate = 0L,
                 overtimeHours = 0.0,
@@ -616,18 +545,17 @@ class WorkerRepository(
                 date = todayJalali,
                 entryTime = "08:00",
                 exitTime = "18:00",
-                regularHours = 8.0,
-                hourlyHours = 3.0,
+                regularHours = 0.0,
+                hourlyHours = 6.0,
                 hourlyWageRate = 180000L,
                 overtimeHours = 2.0,
                 overtimeRate = 210000L,
-                dailyWage = 1400000L,
+                dailyWage = 0L,
                 hourlyWage = 180000L,
-                bonus = 100000L,
                 workplaceName = "کارگاه بیمارستان میلاد",
                 employerName = "شرکت توسعه درمان",
                 foremanName = "مهندس صادقی",
-                notes = "حاضر - سیم‌کشی تابلوی اضطراری اتاق عمل"
+                notes = "ساعتی"
             )
         )
 
@@ -644,12 +572,11 @@ class WorkerRepository(
                 overtimeHours = 2.5,
                 overtimeRate = 150000L,
                 dailyWage = 1150000L,
-                hourlyWage = 145000L,
-                bonus = 0L,
+                hourlyWage = 0L,
                 workplaceName = "کارگاه بیمارستان میلاد",
                 employerName = "شرکت توسعه درمان",
                 foremanName = "مهندس صادقی",
-                notes = "حاضر - گچ‌کاری دور ستون‌ها"
+                notes = "تمام روز"
             )
         )
 
@@ -660,18 +587,17 @@ class WorkerRepository(
                 date = todayJalali,
                 entryTime = "08:15",
                 exitTime = "17:00",
-                regularHours = 8.0,
-                hourlyHours = 4.0,
+                regularHours = 0.0,
+                hourlyHours = 5.0,
                 hourlyWageRate = 130000L,
                 overtimeHours = 0.0,
                 overtimeRate = 0L,
-                dailyWage = 1050000L,
+                dailyWage = 0L,
                 hourlyWage = 130000L,
-                bonus = 0L,
                 workplaceName = "کارگاه بیمارستان میلاد",
                 employerName = "شرکت توسعه درمان",
                 foremanName = "مهندس صادقی",
-                notes = "حاضر - بتونه‌کاری و نقاشی"
+                notes = "ساعتی"
             )
         )
 
@@ -681,19 +607,18 @@ class WorkerRepository(
                 workerId = w9Id,
                 date = todayJalali,
                 entryTime = "08:00",
-                exitTime = "18:00",
-                regularHours = 8.0,
+                exitTime = "13:00",
+                regularHours = 4.0,
                 hourlyHours = 0.0,
                 hourlyWageRate = 0L,
-                overtimeHours = 2.0,
-                overtimeRate = 175000L,
-                dailyWage = 1300000L,
-                hourlyWage = 160000L,
-                bonus = 50000L,
+                overtimeHours = 0.0,
+                overtimeRate = 0L,
+                dailyWage = 650000L,
+                hourlyWage = 0L,
                 workplaceName = "کارگاه بیمارستان میلاد",
                 employerName = "شرکت توسعه درمان",
                 foremanName = "مهندس صادقی",
-                notes = "حاضر - بندکشی و آب‌بندی سرامیک"
+                notes = "نصف روز"
             )
         )
 
@@ -704,50 +629,17 @@ class WorkerRepository(
                 date = todayJalali,
                 entryTime = "08:30",
                 exitTime = "16:30",
-                regularHours = 8.0,
-                hourlyHours = 2.0,
+                regularHours = 0.0,
+                hourlyHours = 4.0,
                 hourlyWageRate = 120000L,
                 overtimeHours = 0.0,
                 overtimeRate = 0L,
-                dailyWage = 950000L,
+                dailyWage = 0L,
                 hourlyWage = 120000L,
-                bonus = 0L,
                 workplaceName = "کارگاه بیمارستان میلاد",
                 employerName = "شرکت توسعه درمان",
                 foremanName = "مهندس صادقی",
-                notes = "حاضر - تست درب‌های ضد حریق"
-            )
-        )
-
-        // Expenses for Workplace 2
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder2Id,
-                title = "هزینه سرویس و ایاب و ذهاب پرسنل",
-                category = "TRANSIT",
-                scope = "GROUP",
-                impactType = "DEDUCTION",
-                amount = 400000L,
-                date = todayJalali,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "کرایه مینی‌بوس"
-            )
-        )
-        expenseDao.insertExpense(
-            ExpenseEntity(
-                folderId = folder2Id,
-                title = "تهیه غذای گرم و پذیرایی",
-                category = "FOOD",
-                scope = "GROUP",
-                impactType = "DEDUCTION",
-                amount = 550000L,
-                date = todayJalali,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "ناهار روزانه کارگاه"
+                notes = "ساعتی"
             )
         )
     }

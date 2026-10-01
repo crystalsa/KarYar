@@ -275,7 +275,7 @@ fun DashboardScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "مجموع هزینه این روز:",
+                                    text = "مجموع دستمزد این روز:",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -283,7 +283,7 @@ fun DashboardScreen(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = "دستمزدها + اضافه کاری + هزینه‌های جاری",
+                                    text = "دستمزد پایه + کارکرد ساعتی + اضافه کاری",
                                     fontSize = 10.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                     maxLines = 1,
@@ -311,16 +311,16 @@ fun DashboardScreen(
                     ) {
                         DailyMetricCard(
                             title = "دستمزد کارگران امروز",
-                            value = Formatters.formatCurrency(dailyBookkeeping.totalDailyWages + dailyBookkeeping.totalHourlyPay + dailyBookkeeping.totalOvertimePay + dailyBookkeeping.totalBonuses),
-                            subtitle = "${Formatters.toPersianDigits(dailyBookkeeping.workersPresent)} کارگر | ${Formatters.toPersianDigits(dailyBookkeeping.totalHours)} ساعت",
+                            value = Formatters.formatCurrency(dailyBookkeeping.totalDailyWages + dailyBookkeeping.totalHourlyPay + dailyBookkeeping.totalOvertimePay),
+                            subtitle = "${Formatters.toPersianDigits(dailyBookkeeping.workersPresent)} کارگر حاضر در کارگاه",
                             accentColor = EmeraldAccent,
                             modifier = Modifier.weight(1f)
                         )
                         DailyMetricCard(
-                            title = "هزینه‌های جاری امروز",
-                            value = Formatters.formatCurrency(dailyBookkeeping.dailyExpenses),
-                            subtitle = "ایاب‌ذهاب، اسکان، غذا، درمان",
-                            accentColor = RoseAccent,
+                            title = "ساعات کارکرد امروز",
+                            value = "${Formatters.toPersianDigits(dailyBookkeeping.totalHours)} ساعت",
+                            subtitle = "مجموع ساعات عادی و اضافه کاری",
+                            accentColor = CyanAccent,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -355,41 +355,6 @@ fun DashboardScreen(
                             color = AmberAccent
                         )
                     }
-                    if (dailyBookkeeping.totalBonuses > 0) {
-                        DailyDetailItem(
-                            title = "پاداش و مساعده",
-                            amount = dailyBookkeeping.totalBonuses,
-                            color = CyanAccent
-                        )
-                    }
-                    if (dailyBookkeeping.transitCost > 0) {
-                        DailyDetailItem(
-                            title = "هزینه ایاب و ذهاب",
-                            amount = dailyBookkeeping.transitCost,
-                            color = CyanAccent
-                        )
-                    }
-                    if (dailyBookkeeping.accommodationCost > 0) {
-                        DailyDetailItem(
-                            title = "هزینه مسکن و اسکان",
-                            amount = dailyBookkeeping.accommodationCost,
-                            color = IndigoAccent
-                        )
-                    }
-                    if (dailyBookkeeping.foodCost > 0) {
-                        DailyDetailItem(
-                            title = "هزینه خوراک و غذا",
-                            amount = dailyBookkeeping.foodCost,
-                            color = AmberAccent
-                        )
-                    }
-                    if (dailyBookkeeping.medicalCost > 0) {
-                        DailyDetailItem(
-                            title = "هزینه درمان و دارو",
-                            amount = dailyBookkeeping.medicalCost,
-                            color = RoseAccent
-                        )
-                    }
                 }
             }
         }
@@ -403,7 +368,7 @@ fun DashboardScreen(
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
-                        text = "مجموع هزینه‌های کل پروژه تاکنون",
+                        text = "مجموع مالی و کارکرد کل کارگاه تاکنون",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         fontSize = 13.5.sp,
@@ -416,11 +381,11 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         GlowStatCard(
-                            title = "هزینه کل پروژه",
+                            title = "کل پرداختی کارگاه",
                             value = Formatters.formatCurrency(analytics.grandTotalProjectCost),
-                            subtitle = "مجموع کل دستمزدها و هزینه‌ها",
+                            subtitle = "مجموع کل دستمزدها و مطالبات",
                             icon = Icons.Default.AttachMoney,
-                            accentColor = AmberAccent,
+                            accentColor = EmeraldAccent,
                             modifier = Modifier.weight(1f)
                         )
                         GlowStatCard(
@@ -449,7 +414,7 @@ fun DashboardScreen(
                         )
                         GlowStatCard(
                             title = "مجموع دستمزدها",
-                            value = Formatters.formatCurrency(analytics.totalWagesPaid + analytics.totalHourlyPaid + analytics.totalOvertimePaid + analytics.totalBonusesPaid),
+                            value = Formatters.formatCurrency(analytics.totalWagesPaid + analytics.totalHourlyPaid + analytics.totalOvertimePaid),
                             subtitle = "مجموع پرداختی تمام روزها",
                             icon = Icons.Default.AttachMoney,
                             accentColor = IndigoAccent,
@@ -565,13 +530,6 @@ fun DashboardScreen(
                                     text = "+${Formatters.toPersianDigits(att.overtimeHours)}h اضافه کار",
                                     fontSize = 11.sp,
                                     color = AmberAccent
-                                )
-                            }
-                            if (att.earlyDepartureMinutes > 0) {
-                                Text(
-                                    text = "-${Formatters.toPersianDigits(att.earlyDepartureMinutes)}m تعجیل",
-                                    fontSize = 11.sp,
-                                    color = RoseAccent
                                 )
                             }
                         }

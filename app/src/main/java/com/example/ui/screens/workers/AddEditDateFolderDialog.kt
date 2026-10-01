@@ -65,7 +65,7 @@ fun AddEditDateFolderDialog(
         mutableStateOf(initialDateFolder?.dayOfWeek ?: JalaliCalendar.getDayOfWeek(initialDate))
     }
     var title by remember {
-        mutableStateOf(initialDateFolder?.title ?: "شیفت کاری")
+        mutableStateOf(initialDateFolder?.title ?: "روز کاری")
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -232,7 +232,7 @@ fun AddEditDateFolderDialog(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("عنوان یا توضیح پوشه (اختیاری)", fontSize = 12.sp) },
-                    placeholder = { Text("مثلاً شیفت صبح، بتن‌ریزی سقف", fontSize = 11.sp) },
+                    placeholder = { Text("مثلاً روز کاری، بتن‌ریزی سقف", fontSize = 11.sp) },
                     leadingIcon = {
                         Icon(Icons.Default.Description, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(16.dp))
                     },

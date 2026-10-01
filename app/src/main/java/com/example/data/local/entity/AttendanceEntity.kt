@@ -26,11 +26,8 @@ data class AttendanceEntity(
     val overtimeRate: Long = 0L,        // نرخ هر ساعت اضافه کاری (تومان)
     val hourlyWageRate: Long = 0L,      // نرخ هر ساعت کارکرد ساعتی (تومان)
     val hourlyHours: Double = 0.0,      // تعداد ساعت کارکرد ساعتی
-    val earlyDepartureMinutes: Int = 0, // ترک زودتر از موعد به دقیقه
-    val earlyDepartureReason: String = "",
     val dailyWage: Long = 0L,           // دستمزد روزانه منظور شده (تومان)
     val hourlyWage: Long = 0L,          // دستمزد ساعتی منظور شده (تومان)
-    val bonus: Long = 0L,               // پاداش
     val workplaceName: String = "",     // نام محل کار / پروژه
     val employerName: String = "",      // نام کارفرما
     val foremanName: String = "",       // نام سرکارگر

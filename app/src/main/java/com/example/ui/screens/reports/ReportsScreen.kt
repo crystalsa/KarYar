@@ -73,7 +73,6 @@ fun ReportsScreen(
     val analytics by viewModel.analytics.collectAsState()
     val workers by viewModel.workers.collectAsState()
     val attendanceList by viewModel.attendanceList.collectAsState()
-    val expenses by viewModel.expenses.collectAsState()
 
     val activeProject = folder?.name ?: "پروژه کارگاهی"
     val activeEmployer = folder?.employerName ?: "کارفرما"
@@ -110,7 +109,7 @@ fun ReportsScreen(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "صدور فیش حقوقی، گزارش هزینه‌ها و عملکرد با محاسبه تفکیکی",
+                                text = "صدور فیش حقوقی، گزارش کارکرد و تسویه حساب پرسنل",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -176,7 +175,6 @@ fun ReportsScreen(
                                             context = context,
                                             workers = workers,
                                             attendanceList = attendanceList,
-                                            expenses = expenses,
                                             performances = performances,
                                             projectName = activeProject
                                         )
@@ -221,7 +219,7 @@ fun ReportsScreen(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "اضافه کاری، ترک زودتر، پاداش، افزایشی و کاهشی",
+                    text = "ساعات کارکرد، اضافه کاری، کمک‌هزینه‌ها و کسورات",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -334,8 +332,12 @@ private fun WorkerPaySlipCard(perf: WorkerPerformance) {
                     .background(Slate100)
                     .padding(10.dp)
             ) {
-                ReportRow("تعداد شیفت و ساعت کارکرد عادی:", "${Formatters.toPersianDigits(perf.totalShifts)} شیفت (${Formatters.toPersianDigits(perf.regularHours)} ساعت)")
-                ReportRow("دستمزد پایه تجمیعی:", Formatters.formatCurrency(perf.baseWageTotal))
+                if (perf.worker.isHourlyEnabled) {
+                    ReportRow("ساعات کارکرد عادی:", "${Formatters.toPersianDigits(perf.hourlyHours)} ساعت")
+                } else {
+                    ReportRow("تعداد روزهای کارکرد:", "${Formatters.toPersianDigits(perf.totalShifts)} روز")
+                    ReportRow("دستمزد پایه تجمیعی:", Formatters.formatCurrency(perf.baseWageTotal))
+                }
 
                 if (perf.hourlyPayTotal > 0 || perf.hourlyHours > 0) {
                     ReportRow("دستمزد ساعتی (${Formatters.toPersianDigits(perf.hourlyHours)} ساعت):", "+${Formatters.formatCurrency(perf.hourlyPayTotal)}", CyanAccent)
@@ -343,19 +345,12 @@ private fun WorkerPaySlipCard(perf: WorkerPerformance) {
                 if (perf.overtimeHours > 0) {
                     ReportRow("اضافه کاری (${Formatters.toPersianDigits(perf.overtimeHours)} ساعت):", "+${Formatters.formatCurrency(perf.overtimePayTotal)}", AmberAccent)
                 }
-                if (perf.bonusTotal > 0) {
-                    ReportRow("پاداش منظور شده:", "+${Formatters.formatCurrency(perf.bonusTotal)}", EmeraldAccent)
-                }
                 if (perf.totalAllowances > 0) {
                     ReportRow("(+) مجموع کمک‌هزینه‌های افزایشی:", "+${Formatters.formatCurrency(perf.totalAllowances)}", EmeraldAccent)
                 }
                 if (perf.totalDeductions > 0) {
-                    ReportRow("(-) مجموع کسورات هزینه‌ها:", "-${Formatters.formatCurrency(perf.totalDeductions)}", RoseAccent)
+                    ReportRow("(-) مجموع کسورات:", "-${Formatters.formatCurrency(perf.totalDeductions)}", RoseAccent)
                 }
-                if (perf.earlyDepartureMinutes > 0) {
-                    ReportRow("(-) کسر ترک زودتر (${perf.earlyDepartureMinutes} دقیقه):", "-${Formatters.formatCurrency(perf.earlyDepartureDeduction)}", RoseAccent)
-                }
-                ReportRow("سهم از هزینه‌های جمعی کارگاه:", Formatters.formatCurrency(perf.groupExpenseShare), IndigoAccent)
             }
         }
     }

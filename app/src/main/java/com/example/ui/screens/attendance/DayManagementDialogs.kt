@@ -155,7 +155,7 @@ fun DayActionOptionsDialog(
                                 color = AmberAccent
                             )
                             Text(
-                                text = "تغییر تاریخ، روز هفته یا عنوان شیفت",
+                                text = "تغییر تاریخ، روز هفته یا عنوان روز کاری",
                                 fontSize = 11.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

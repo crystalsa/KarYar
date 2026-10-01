@@ -1,5 +1,7 @@
 package com.example.ui.screens.attendance
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -76,20 +78,26 @@ fun AddAttendanceDialog(
     var regularHours by remember { mutableStateOf("") }
     var hasOvertime by remember { mutableStateOf(false) }
     var overtimeHours by remember { mutableStateOf("") }
-    var earlyDepartureMinutes by remember { mutableStateOf("") }
-    var earlyDepartureReason by remember { mutableStateOf("") }
+
+    var isHourly by remember {
+        mutableStateOf(selectedWorker?.isHourlyEnabled == true)
+    }
 
     var dailyWage by remember {
         mutableStateOf(
-            selectedWorker?.baseDailyWage?.let { if (it > 0) Formatters.formatThousandsPersian(it) else "" } ?: ""
+            if (selectedWorker?.isHourlyEnabled != true && (selectedWorker?.baseDailyWage ?: 0L) > 0L)
+                Formatters.formatThousandsPersian(selectedWorker!!.baseDailyWage)
+            else ""
         )
     }
     var hourlyWage by remember {
         mutableStateOf(
-            selectedWorker?.baseHourlyWage?.let { if (it > 0) Formatters.formatThousandsPersian(it) else "" } ?: ""
+            if (selectedWorker?.isHourlyEnabled == true) {
+                val r = if ((selectedWorker?.hourlyWageRate ?: 0L) > 0L) selectedWorker!!.hourlyWageRate else (selectedWorker?.baseHourlyWage ?: 0L)
+                if (r > 0L) Formatters.formatThousandsPersian(r) else ""
+            } else ""
         )
     }
-    var bonus by remember { mutableStateOf("") }
 
     var workplaceName by remember { mutableStateOf(folder?.name ?: "") }
     var employerName by remember { mutableStateOf(folder?.employerName ?: "") }
@@ -99,8 +107,15 @@ fun AddAttendanceDialog(
     // Auto update wage when selected worker changes
     fun onWorkerChanged(worker: WorkerEntity) {
         selectedWorker = worker
-        dailyWage = if (worker.baseDailyWage > 0) Formatters.formatThousandsPersian(worker.baseDailyWage) else ""
-        hourlyWage = if (worker.baseHourlyWage > 0) Formatters.formatThousandsPersian(worker.baseHourlyWage) else ""
+        isHourly = worker.isHourlyEnabled
+        if (worker.isHourlyEnabled) {
+            dailyWage = ""
+            val r = if (worker.hourlyWageRate > 0L) worker.hourlyWageRate else worker.baseHourlyWage
+            hourlyWage = if (r > 0L) Formatters.formatThousandsPersian(r) else ""
+        } else {
+            dailyWage = if (worker.baseDailyWage > 0L) Formatters.formatThousandsPersian(worker.baseDailyWage) else ""
+            hourlyWage = ""
+        }
     }
 
     Dialog(
@@ -242,7 +257,7 @@ fun AddAttendanceDialog(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "ثبت اضافه کاری برای این شیفت",
+                        text = "ثبت اضافه کاری برای این روز",
                         fontSize = 13.5.sp,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurface
@@ -268,69 +283,111 @@ fun AddAttendanceDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Early departure minutes & reason
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = earlyDepartureMinutes,
-                        onValueChange = { earlyDepartureMinutes = it },
-                        label = { Text("ترک زودتر (دقیقه)") },
-                        placeholder = { Text("۰") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = earlyDepartureReason,
-                        onValueChange = { earlyDepartureReason = it },
-                        label = { Text("دلیل ترک زودتر") },
-                        placeholder = { Text("اختیاری") },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Daily Wage & Hourly Wage with 3-digit comma separation
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedTextField(
-                        value = dailyWage,
-                        onValueChange = { dailyWage = Formatters.formatPriceInput(it) },
-                        label = { Text("دستمزد روزانه (تومان)") },
-                        placeholder = { Text("مبلغ به تومان") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = hourlyWage,
-                        onValueChange = { hourlyWage = Formatters.formatPriceInput(it) },
-                        label = { Text("دستمزد ساعتی (تومان)") },
-                        placeholder = { Text("مبلغ به تومان") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(10.dp))
-
-                // Bonus field with 3-digit comma separation
+                // --- Base Daily Wage (دستمزد روزانه ثابت پیش‌فرض) ---
                 OutlinedTextField(
-                    value = bonus,
-                    onValueChange = { bonus = Formatters.formatPriceInput(it) },
-                    label = { Text("پاداش یا مساعده نقدی امروز (تومان)") },
-                    placeholder = { Text("۰") },
+                    value = dailyWage,
+                    onValueChange = { dailyWage = Formatters.formatPriceInput(it) },
+                    enabled = !isHourly,
+                    label = {
+                        Text(if (isHourly) "دستمزد روزانه (خاموش شده)" else "دستمزد روزانه ثابت (تومان)")
+                    },
+                    placeholder = {
+                        Text(if (isHourly) "خاموش (دستمزد ساعتی فعال است)" else "مبلغ به تومان")
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledContainerColor = Slate100.copy(alpha = 0.6f),
+                        disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        disabledBorderColor = Slate200.copy(alpha = 0.7f),
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
                 )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // --- SECTION: Hourly Wage (فعال‌سازی با یک تیک‌باکس) ---
+                val parsedAttHourlyRate = Formatters.parsePrice(hourlyWage)
+                val parsedAttHourlyHours = Formatters.parseDouble(regularHours)
+                val attHourlyTotal = if (isHourly && parsedAttHourlyRate > 0 && parsedAttHourlyHours > 0) {
+                    (parsedAttHourlyRate * parsedAttHourlyHours).toLong()
+                } else 0L
+
+                HairlineCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    backgroundColor = if (isHourly) CyanAccent.copy(alpha = 0.08f) else Slate100,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isHourly = !isHourly },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = isHourly,
+                                    onCheckedChange = { isHourly = it },
+                                    colors = CheckboxDefaults.colors(checkedColor = CyanAccent),
+                                    modifier = Modifier.size(28.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "دستمزد ساعتی",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp,
+                                    color = if (isHourly) CyanAccent else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (isHourly && attHourlyTotal > 0) {
+                                Text(
+                                    text = "جمع: ${Formatters.formatCurrency(attHourlyTotal)}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = CyanAccent
+                                )
+                            }
+                        }
+
+                        // وقتی تیک باکس زده میشه دو کادر باز بشه و مبلغ و تعداد ساعت نوشته بشه
+                        AnimatedVisibility(visible = isHourly) {
+                            Column {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // کادر اول: مبلغ هر ساعت
+                                    OutlinedTextField(
+                                        value = hourlyWage,
+                                        onValueChange = { hourlyWage = Formatters.formatPriceInput(it) },
+                                        label = { Text("مبلغ هر ساعت (تومان)", fontSize = 11.sp) },
+                                        placeholder = { Text("۱۵۰,۰۰۰", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.weight(1.2f),
+                                        singleLine = true
+                                    )
+                                    // کادر دوم: تعداد ساعت کار
+                                    OutlinedTextField(
+                                        value = regularHours,
+                                        onValueChange = {
+                                            regularHours = Formatters.toEnglishDigits(it).filter { ch -> ch.isDigit() || ch == '.' }
+                                        },
+                                        label = { Text("تعداد ساعت کار", fontSize = 11.sp) },
+                                        placeholder = { Text("۸", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(0.8f),
+                                        singleLine = true
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
@@ -375,7 +432,7 @@ fun AddAttendanceDialog(
                 OutlinedTextField(
                     value = notes,
                     onValueChange = { notes = it },
-                    label = { Text("توضیحات شیفت") },
+                    label = { Text("توضیحات و یادداشت") },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 2
                 )
@@ -398,11 +455,10 @@ fun AddAttendanceDialog(
                                 exitTime = exitTime.trim(),
                                 regularHours = finalRegHours,
                                 overtimeHours = if (hasOvertime) Formatters.parseDouble(overtimeHours) else 0.0,
-                                earlyDepartureMinutes = Formatters.parseInt(earlyDepartureMinutes),
-                                earlyDepartureReason = earlyDepartureReason.trim(),
-                                dailyWage = if (dailyWage.isNotBlank()) Formatters.parsePrice(dailyWage) else worker.baseDailyWage,
-                                hourlyWage = if (hourlyWage.isNotBlank()) Formatters.parsePrice(hourlyWage) else worker.baseHourlyWage,
-                                bonus = Formatters.parsePrice(bonus),
+                                dailyWage = if (!isHourly) (if (dailyWage.isNotBlank()) Formatters.parsePrice(dailyWage) else worker.baseDailyWage) else 0L,
+                                hourlyWage = if (isHourly) (if (hourlyWage.isNotBlank()) Formatters.parsePrice(hourlyWage) else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)) else 0L,
+                                hourlyWageRate = if (isHourly) (if (hourlyWage.isNotBlank()) Formatters.parsePrice(hourlyWage) else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)) else 0L,
+                                hourlyHours = if (isHourly) finalRegHours else 0.0,
                                 workplaceName = workplaceName.trim(),
                                 employerName = employerName.trim(),
                                 foremanName = foremanName.trim(),

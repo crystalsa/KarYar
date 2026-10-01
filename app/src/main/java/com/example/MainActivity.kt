@@ -85,7 +85,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.WorkerViewModel
 import com.example.ui.screens.attendance.AttendanceScreen
 import com.example.ui.screens.dashboard.DashboardScreen
-import com.example.ui.screens.expenses.ExpensesScreen
 import com.example.ui.screens.folders.FoldersScreen
 import com.example.ui.screens.reports.ReportsScreen
 import com.example.ui.screens.workers.WorkersScreen
@@ -102,7 +101,6 @@ enum class MainTab(val title: String, val icon: ImageVector, val tag: String) {
     DASHBOARD("داشبورد", Icons.Default.Dashboard, "tab_dashboard"),
     WORKERS("کارگران", Icons.Default.People, "tab_workers"),
     ATTENDANCE("ورود/خروج", Icons.Default.AccessTime, "tab_attendance"),
-    EXPENSES("هزینه‌ها", Icons.Default.AttachMoney, "tab_expenses"),
     REPORTS("گزارشات", Icons.Default.Assessment, "tab_reports")
 }
 
@@ -404,8 +402,9 @@ fun WorkerManagementApp(
                 }
             }
         }
-    },
-    bottomBar = {
+    }
+},
+        bottomBar = {
             // Show bottom navigation bar only when a folder is actively opened
             if (currentFolder != null) {
                 Surface(
@@ -487,14 +486,12 @@ fun WorkerManagementApp(
                                 when (targetTag) {
                                     "WORKERS" -> selectedTab = MainTab.WORKERS
                                     "ATTENDANCE" -> selectedTab = MainTab.ATTENDANCE
-                                    "EXPENSES" -> selectedTab = MainTab.EXPENSES
                                     "REPORTS" -> selectedTab = MainTab.REPORTS
                                 }
                             }
                         )
                         MainTab.WORKERS -> WorkersScreen(viewModel = viewModel)
                         MainTab.ATTENDANCE -> AttendanceScreen(viewModel = viewModel)
-                        MainTab.EXPENSES -> ExpensesScreen(viewModel = viewModel)
                         MainTab.REPORTS -> ReportsScreen(viewModel = viewModel)
                     }
                 }

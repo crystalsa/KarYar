@@ -6,12 +6,10 @@ data class DashboardAnalytics(
     val todayAttendanceCount: Int = 0,
     val totalWorkHours: Double = 0.0,
     val totalOvertimeHours: Double = 0.0,
-    val totalEarlyDepartureMinutes: Int = 0,
     // Costs
     val totalWagesPaid: Long = 0L,
     val totalHourlyPaid: Long = 0L,
     val totalOvertimePaid: Long = 0L,
-    val totalBonusesPaid: Long = 0L,
     val totalTransitExpenses: Long = 0L,
     val totalAccommodationExpenses: Long = 0L,
     val totalAccommodationDays: Int = 0,

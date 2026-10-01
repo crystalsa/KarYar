@@ -1,6 +1,7 @@
 package com.example.ui.screens.workers
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -22,8 +23,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
@@ -314,11 +317,11 @@ fun AddEditWorkerDialog(
                 role = role.trim(),
                 phone = finalPhone,
                 nationalId = finalNationalId,
-                baseDailyWage = Formatters.parsePrice(baseDailyWage),
-                baseHourlyWage = parsedHourlyRate,
+                baseDailyWage = if (isHourlyEnabled) 0L else Formatters.parsePrice(baseDailyWage),
+                baseHourlyWage = if (isHourlyEnabled) parsedHourlyRate else 0L,
                 isHourlyEnabled = isHourlyEnabled,
-                hourlyWageRate = parsedHourlyRate,
-                hourlyHours = parsedHourlyHours,
+                hourlyWageRate = if (isHourlyEnabled) parsedHourlyRate else 0L,
+                hourlyHours = if (isHourlyEnabled) parsedHourlyHours else 0.0,
                 isOvertimeEnabled = isOvertimeEnabled,
                 overtimeRate = parsedOvertimeRate,
                 overtimeHours = parsedOvertimeHours,
@@ -607,22 +610,41 @@ fun AddEditWorkerDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // Base Daily Wage
+                // --- Base Daily Wage (دستمزد روزانه ثابت پیش‌فرض) ---
                 OutlinedTextField(
                     value = baseDailyWage,
                     onValueChange = { baseDailyWage = Formatters.formatPriceInput(it) },
-                    label = { Text("دستمزد روزانه (تومان)", fontSize = 12.sp) },
-                    placeholder = { Text("مثلاً ۱,۲۰۰,۰۰۰", fontSize = 11.sp) },
+                    enabled = !isHourlyEnabled,
+                    label = {
+                        Text(
+                            text = if (isHourlyEnabled) "دستمزد روزانه (خاموش شده)" else "دستمزد روزانه ثابت (تومان)",
+                            fontSize = 12.sp,
+                            color = if (isHourlyEnabled) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else AmberAccent
+                        )
+                    },
+                    placeholder = {
+                        Text(
+                            text = if (isHourlyEnabled) "خاموش (دستمزد ساعتی فعال است)" else "مثلاً ۱,۲۰۰,۰۰۰",
+                            fontSize = 11.sp
+                        )
+                    },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        disabledContainerColor = Slate100.copy(alpha = 0.6f),
+                        disabledTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f),
+                        disabledBorderColor = Slate200.copy(alpha = 0.7f),
+                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                    )
                 )
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
-                // --- SECTION: Hourly Wage ---
+                // --- SECTION: Hourly Wage (فعال‌سازی با یک تیک‌باکس) ---
                 val parsedHourlyRateVal = Formatters.parsePrice(hourlyWageRate)
                 val parsedHourlyHoursVal = Formatters.parseDouble(hourlyHours)
                 val hourlyTotal = if (isHourlyEnabled && parsedHourlyRateVal > 0 && parsedHourlyHoursVal > 0) {
@@ -631,19 +653,25 @@ fun AddEditWorkerDialog(
 
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
-                    backgroundColor = Slate100,
+                    backgroundColor = if (isHourlyEnabled) CyanAccent.copy(alpha = 0.08f) else Slate100,
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    isHourlyEnabled = !isHourlyEnabled
+                                },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
                                     checked = isHourlyEnabled,
-                                    onCheckedChange = { isHourlyEnabled = it },
+                                    onCheckedChange = { checked ->
+                                        isHourlyEnabled = checked
+                                    },
                                     colors = CheckboxDefaults.colors(checkedColor = CyanAccent),
                                     modifier = Modifier.size(28.dp)
                                 )
@@ -651,11 +679,11 @@ fun AddEditWorkerDialog(
                                 Text(
                                     text = "دستمزد ساعتی",
                                     fontWeight = FontWeight.Bold,
-                                    fontSize = 12.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    fontSize = 12.sp,
+                                    color = if (isHourlyEnabled) CyanAccent else MaterialTheme.colorScheme.onSurface
                                 )
                             }
-                            if (hourlyTotal > 0) {
+                            if (isHourlyEnabled && hourlyTotal > 0) {
                                 Text(
                                     text = "جمع: ${Formatters.formatCurrency(hourlyTotal)}",
                                     fontSize = 11.sp,
@@ -665,32 +693,37 @@ fun AddEditWorkerDialog(
                             }
                         }
 
-                        if (isHourlyEnabled) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = hourlyWageRate,
-                                    onValueChange = { hourlyWageRate = Formatters.formatPriceInput(it) },
-                                    label = { Text("مبلغ هر ساعت (تومان)", fontSize = 11.sp) },
-                                    placeholder = { Text("۱۵۰,۰۰۰", fontSize = 11.sp) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.weight(1.2f),
-                                    singleLine = true
-                                )
-                                OutlinedTextField(
-                                    value = hourlyHours,
-                                    onValueChange = {
-                                        hourlyHours = Formatters.toEnglishDigits(it).filter { ch -> ch.isDigit() || ch == '.' }
-                                    },
-                                    label = { Text("ساعت کار", fontSize = 11.sp) },
-                                    placeholder = { Text("۲", fontSize = 11.sp) },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                                    modifier = Modifier.weight(0.8f),
-                                    singleLine = true
-                                )
+                        // وقتی تیک باکس زده میشه دو کادر باز بشه و مبلغ و تعداد ساعت نوشته بشه
+                        AnimatedVisibility(visible = isHourlyEnabled) {
+                            Column {
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // کادر اول: مبلغ هر ساعت
+                                    OutlinedTextField(
+                                        value = hourlyWageRate,
+                                        onValueChange = { hourlyWageRate = Formatters.formatPriceInput(it) },
+                                        label = { Text("مبلغ هر ساعت (تومان)", fontSize = 11.sp) },
+                                        placeholder = { Text("۱۵۰,۰۰۰", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        modifier = Modifier.weight(1.2f),
+                                        singleLine = true
+                                    )
+                                    // کادر دوم: تعداد ساعت کار
+                                    OutlinedTextField(
+                                        value = hourlyHours,
+                                        onValueChange = {
+                                            hourlyHours = Formatters.toEnglishDigits(it).filter { ch -> ch.isDigit() || ch == '.' }
+                                        },
+                                        label = { Text("تعداد ساعت کار", fontSize = 11.sp) },
+                                        placeholder = { Text("۸", fontSize = 11.sp) },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                        modifier = Modifier.weight(0.8f),
+                                        singleLine = true
+                                    )
+                                }
                             }
                         }
                     }

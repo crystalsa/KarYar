@@ -50,7 +50,9 @@ import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldAccent
 import com.example.ui.theme.RoseAccent
 import com.example.ui.theme.Slate100
+import com.example.ui.theme.Slate400
 import com.example.util.Formatters
+import com.example.util.WageCalculator
 
 @Composable
 fun WorkerDetailDialog(
@@ -58,8 +60,8 @@ fun WorkerDetailDialog(
     attendance: AttendanceEntity? = null,
     performance: WorkerPerformance? = null,
     onDismiss: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onEdit: () -> Unit = {},
+    onDelete: () -> Unit = {}
 ) {
     Dialog(onDismissRequest = onDismiss) {
         HairlineCard(
@@ -120,33 +122,40 @@ fun WorkerDetailDialog(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Status & Contact tightly displayed
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatusBadge(
-                        text = if (worker.isActive) "مشغول به کار" else "غیرفعال / مرخصی",
-                        dotColor = if (worker.isActive) EmeraldAccent else RoseAccent
-                    )
-                    if (worker.phone.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconicsBox(
-                                icon = Icons.Default.Phone,
-                                color = EmeraldAccent,
-                                size = IconicsSize.TINY
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = Formatters.toPersianDigits(worker.phone),
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                // Status badge: مشغول به کار یا غایب
+                val isWorkerAbsent = WageCalculator.isAbsent(worker, attendance)
+                StatusBadge(
+                    text = when {
+                        isWorkerAbsent -> "غایب"
+                        worker.isActive -> "مشغول به کار"
+                        else -> "مرخصی"
+                    },
+                    dotColor = when {
+                        isWorkerAbsent -> RoseAccent
+                        worker.isActive -> EmeraldAccent
+                        else -> Slate400
+                    }
+                )
+
+                // شماره تلفن: زیر مشغول به کار و بالای کد ملی
+                if (worker.phone.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconicsBox(
+                            icon = Icons.Default.Phone,
+                            color = EmeraldAccent,
+                            size = IconicsSize.TINY
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = Formatters.toPersianDigits(worker.phone),
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
 
+                // کد ملی: زیر شماره تلفن
                 if (worker.nationalId.isNotBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -155,7 +164,7 @@ fun WorkerDetailDialog(
                             color = CyanAccent,
                             size = IconicsSize.TINY
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "کد ملی: ${Formatters.toPersianDigits(worker.nationalId)}",
                             fontSize = 11.sp,
@@ -181,19 +190,22 @@ fun WorkerDetailDialog(
                         )
                         Spacer(modifier = Modifier.height(6.dp))
 
-                        val isAbsent = attendance != null && (attendance.regularHours == 0.0 || attendance.notes == "غیبت")
-                        val isHalfDay = attendance != null && (attendance.regularHours == 4.0 || attendance.notes == "نصف روز")
-                        val isFullDay = attendance != null && (attendance.regularHours >= 8.0 && attendance.notes != "غیبت" && attendance.notes != "نصف روز")
+                        val isHourly = WageCalculator.isHourly(worker, attendance)
+                        val isAbsent = WageCalculator.isAbsent(worker, attendance)
+                        val isHalfDay = WageCalculator.isHalfDay(worker, attendance)
+                        val isFullDay = WageCalculator.isFullDay(worker, attendance)
 
                         if (attendance != null) {
                             val attStatusText = when {
                                 isAbsent -> "غیبت"
-                                isHalfDay -> "نصف روز (۴ ساعت)"
-                                isFullDay -> "تمام روز (۸ ساعت)"
+                                isHourly -> "ساعتی"
+                                isHalfDay -> "نصف روز"
+                                isFullDay -> "تمام روز"
                                 else -> "ثبت شده"
                             }
                             val attStatusColor = when {
                                 isAbsent -> RoseAccent
+                                isHourly -> CyanAccent
                                 isHalfDay -> AmberAccent
                                 else -> EmeraldAccent
                             }
@@ -206,9 +218,25 @@ fun WorkerDetailDialog(
 
                         if (isAbsent) {
                             CompactDetailRow(
-                                label = "دستمزد روزانه این روز:",
+                                label = if (isHourly) "دستمزد ساعتی این روز:" else "دستمزد روزانه این روز:",
                                 value = "غیبت (مبلغ ثبت نشد)",
                                 valueColor = RoseAccent
+                            )
+                        } else if (isHourly) {
+                            val hRate = if (attendance != null && attendance.hourlyWageRate > 0) attendance.hourlyWageRate
+                                        else if (attendance != null && attendance.hourlyWage > 0) attendance.hourlyWage
+                                        else if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage
+                            val hHours = if (attendance != null && attendance.hourlyHours > 0) attendance.hourlyHours
+                                         else if (worker.hourlyHours > 0) worker.hourlyHours else 0.0
+                            val totalHPay = (hHours * hRate).toLong()
+                            CompactDetailRow(
+                                label = "دستمزد ساعتی:",
+                                value = if (totalHPay > 0) {
+                                    "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (${Formatters.formatCurrency(totalHPay)})"
+                                } else {
+                                    "ساعتی ${Formatters.formatCurrency(hRate)}"
+                                },
+                                valueColor = CyanAccent
                             )
                         } else if (isHalfDay) {
                             val halfWage = if (attendance?.dailyWage != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage / 2
@@ -217,17 +245,9 @@ fun WorkerDetailDialog(
                                 value = Formatters.formatCurrency(halfWage),
                                 valueColor = AmberAccent
                             )
-                        } else if (worker.baseDailyWage > 0) {
+                        } else if (worker.baseDailyWage > 0 || (attendance?.dailyWage ?: 0L) > 0L) {
                             val wageToDisplay = if (attendance != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage
                             CompactDetailRow("دستمزد روزانه:", Formatters.formatCurrency(wageToDisplay))
-                        }
-
-                        if (worker.isHourlyEnabled || worker.hourlyHours > 0 || worker.hourlyWageRate > 0) {
-                            val hRate = if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage
-                            CompactDetailRow(
-                                "دستمزد ساعتی:",
-                                "${Formatters.toPersianDigits(worker.hourlyHours.toString().removeSuffix(".0"))} ساعت × ${Formatters.formatCurrency(hRate)}"
-                            )
                         }
 
                         if (worker.isOvertimeEnabled || worker.overtimeHours > 0 || worker.overtimeRate > 0) {
@@ -239,7 +259,6 @@ fun WorkerDetailDialog(
 
                         if (performance != null) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            CompactDetailRow("تعداد شیفت‌ها:", "${Formatters.toPersianDigits(performance.totalShifts)} شیفت (${Formatters.toPersianDigits(performance.regularHours)} ساعت)")
 
                             if (performance.hourlyPayTotal > 0) {
                                 CompactDetailRow(
@@ -257,10 +276,6 @@ fun WorkerDetailDialog(
                                 )
                             }
 
-                            if (performance.bonusTotal > 0) {
-                                CompactDetailRow("پاداش منظور شده:", Formatters.formatCurrency(performance.bonusTotal))
-                            }
-
                             if (performance.totalAllowances > 0) {
                                 CompactDetailRow(
                                     label = "(+) مجموع کمک‌هزینه‌ها:",
@@ -273,14 +288,6 @@ fun WorkerDetailDialog(
                                 CompactDetailRow(
                                     label = "(-) مجموع کسورات هزینه‌ها:",
                                     value = "-${Formatters.formatCurrency(performance.totalDeductions)}",
-                                    valueColor = RoseAccent
-                                )
-                            }
-
-                            if (performance.earlyDepartureMinutes > 0) {
-                                CompactDetailRow(
-                                    label = "(-) کسر تعجیل در خروج:",
-                                    value = "-${Formatters.formatCurrency(performance.earlyDepartureDeduction)} (${Formatters.toPersianDigits(performance.earlyDepartureMinutes)} دقیقه)",
                                     valueColor = RoseAccent
                                 )
                             }
@@ -321,37 +328,15 @@ fun WorkerDetailDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Actions using LoadingButton
-                Row(
+                // Action: Close
+                LoadingButton(
+                    text = "بستن",
+                    onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LoadingOutlinedButton(
-                        text = "بستن",
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
-                        height = 38.dp,
-                        fontSize = 12.sp
-                    )
-                    LoadingButton(
-                        text = "ویرایش",
-                        icon = Icons.Default.Edit,
-                        onClick = onEdit,
-                        modifier = Modifier.weight(1.2f),
-                        containerColor = AmberAccent,
-                        height = 38.dp,
-                        fontSize = 12.sp
-                    )
-                    IconButton(
-                        onClick = onDelete,
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(RoseAccent.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = "حذف", tint = RoseAccent, modifier = Modifier.size(17.dp))
-                    }
-                }
+                    containerColor = AmberAccent,
+                    height = 38.dp,
+                    fontSize = 12.5.sp
+                )
             }
         }
     }

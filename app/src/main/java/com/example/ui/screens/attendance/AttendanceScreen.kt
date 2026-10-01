@@ -56,6 +56,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,16 +67,19 @@ import com.example.ui.components.HairlineCard
 import com.example.ui.components.IconicsBox
 import com.example.ui.components.IconicsSize
 import com.example.ui.components.LoadingButton
+import com.example.ui.components.LoadingOutlinedButton
 import com.example.ui.components.StatusBadge
 import com.example.ui.screens.workers.AddEditDateFolderDialog
 import com.example.ui.screens.workers.AddEditWorkerDialog
 import com.example.ui.theme.AmberAccent
+import com.example.ui.theme.CyanAccent
 import com.example.ui.theme.EmeraldAccent
 import com.example.ui.theme.RoseAccent
 import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
 import com.example.util.Formatters
 import com.example.util.JalaliCalendar
+import com.example.util.WageCalculator
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -90,6 +94,8 @@ fun AttendanceScreen(
     val attendanceList by viewModel.attendanceList.collectAsState()
 
     var isAddingWorker by remember { mutableStateOf(false) }
+    var showMustCreateDayDialog by remember { mutableStateOf(false) }
+    var showHourlyProfileRequiredDialog by remember { mutableStateOf(false) }
     var editingWorker by remember { mutableStateOf<WorkerEntity?>(null) }
     var deletingWorkerFromAttendance by remember { mutableStateOf<WorkerEntity?>(null) }
     var copyingWorkerFromAttendance by remember { mutableStateOf<WorkerEntity?>(null) }
@@ -101,16 +107,11 @@ fun AttendanceScreen(
     var deletingDateFolder by remember { mutableStateOf<DateFolderEntity?>(null) }
 
     // Active day folder logic
-    val activeDayFolder: DateFolderEntity? = selectedDateFolder ?: dateFolders.firstOrNull()
-    val targetDate = activeDayFolder?.date ?: JalaliCalendar.todayString()
+    val activeDayFolder: DateFolderEntity? = selectedDateFolder ?: dateFolders.lastOrNull() ?: dateFolders.firstOrNull()
+    val targetDate = activeDayFolder?.date ?: ""
 
-    // Workers for the active day: if date folder is selected, filter by date folder if assigned, or show workplace workers
-    val dayWorkers: List<WorkerEntity> = if (activeDayFolder != null) {
-        val specific = allWorkers.filter { it.dateFolderId == activeDayFolder.id || it.workDate == activeDayFolder.date }
-        if (specific.isNotEmpty()) specific else allWorkers
-    } else {
-        allWorkers
-    }
+    // Workers for the active day: all workers in the workplace belong to the active day
+    val dayWorkers: List<WorkerEntity> = allWorkers
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -136,7 +137,7 @@ fun AttendanceScreen(
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "روزهای کاری و شیفت‌ها",
+                                text = "روزهای کاری",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.5.sp,
@@ -186,12 +187,35 @@ fun AttendanceScreen(
                             shape = RoundedCornerShape(10.dp),
                             backgroundColor = Slate100
                         ) {
-                            Text(
-                                text = "هنوز روز کاری ثبت نشده است",
-                                modifier = Modifier.padding(10.dp),
-                                fontSize = 11.5.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = "هنوز روز کاری ثبت نشده است",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(3.dp))
+                                Text(
+                                    text = "شاید بخواهید از روز دیگری شروع کنید؛ روز کاری مورد نظر خود را ایجاد نمایید.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                LoadingButton(
+                                    text = "ایجاد اولین روز کاری",
+                                    icon = Icons.Default.Add,
+                                    onClick = { isCreatingNextDay = true },
+                                    containerColor = AmberAccent,
+                                    height = 36.dp,
+                                    fontSize = 11.5.sp
+                                )
+                            }
                         }
                     } else {
                         Row(
@@ -238,12 +262,58 @@ fun AttendanceScreen(
             }
 
             // Quick Attendance Checkbox Table
-            item {
-                HairlineCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    backgroundColor = MaterialTheme.colorScheme.surface
-                ) {
+            if (activeDayFolder == null) {
+                item {
+                    HairlineCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        backgroundColor = MaterialTheme.colorScheme.surface
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            IconicsBox(
+                                icon = Icons.Default.CalendarMonth,
+                                color = AmberAccent,
+                                size = IconicsSize.HERO
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "هیچ روز کاری فعالی وجود ندارد",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "برای ثبت ورود و خروج، محاسبه ساعات کاری و حضور و غیاب پرسنل، لطفاً ابتدا روز کاری مورد نظر خود را ایجاد کنید (می‌توانید از هر تاریخی شروع نمایید).",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(14.dp))
+                            LoadingButton(
+                                text = "ایجاد اولین روز کاری",
+                                icon = Icons.Default.Add,
+                                onClick = { isCreatingNextDay = true },
+                                containerColor = AmberAccent,
+                                height = 40.dp
+                            )
+                        }
+                    }
+                }
+            } else {
+                item {
+                    HairlineCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        backgroundColor = MaterialTheme.colorScheme.surface
+                    ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         // Header row: Folder icon, Day of week and date right next to each other
                         Row(
@@ -308,12 +378,12 @@ fun AttendanceScreen(
                                     // 1. Full Day (تمام روز)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(42.dp),
+                                        modifier = Modifier.width(38.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "تمام روز",
-                                            fontSize = 9.5.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = EmeraldAccent
                                         )
@@ -322,33 +392,47 @@ fun AttendanceScreen(
                                     // 2. Half Day (نصف روز)
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(42.dp),
+                                        modifier = Modifier.width(38.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "نصف روز",
-                                            fontSize = 9.5.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = AmberAccent
                                         )
                                     }
 
-                                    // 3. Absent (غیبت)
+                                    // 3. Hourly (ساعتی) - بین نصف روز و غیبت
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.width(36.dp),
+                                        modifier = Modifier.width(38.dp),
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Text(
+                                            text = "ساعتی",
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = CyanAccent
+                                        )
+                                    }
+
+                                    // 4. Absent (غیبت)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.width(34.dp),
                                         horizontalArrangement = Arrangement.Center
                                     ) {
                                         Text(
                                             text = "غیبت",
-                                            fontSize = 9.5.sp,
+                                            fontSize = 9.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = RoseAccent
                                         )
                                     }
 
                                     // Spacer for 3-dots menu button width
-                                    Spacer(modifier = Modifier.width(28.dp))
+                                    Spacer(modifier = Modifier.width(26.dp))
                                 }
                             }
 
@@ -357,13 +441,15 @@ fun AttendanceScreen(
                             // Worker Rows
                             dayWorkers.forEach { worker ->
                                 val att = attendanceList.firstOrNull { it.workerId == worker.id && it.date == targetDate }
-                                val isFullDay = (att != null && att.regularHours >= 8.0 && att.notes != "غیبت" && att.notes != "نصف روز")
-                                val isHalfDay = (att != null && att.regularHours == 4.0 && att.notes == "نصف روز")
-                                val isAbsent = (att != null && (att.regularHours == 0.0 || att.notes == "غیبت"))
+                                val isHourlyWorker = WageCalculator.isHourly(worker, att)
+                                val isAbsent = WageCalculator.isAbsent(worker, att)
+                                val isHalfDay = WageCalculator.isHalfDay(worker, att)
+                                val isFullDay = WageCalculator.isFullDay(worker, att)
+                                val isHourlyChecked = isHourlyWorker && !isAbsent
                                 val otHours = if (att != null && att.overtimeHours > 0.0) att.overtimeHours else worker.overtimeHours
                                 val hasOvertime = otHours > 0.0
 
-                                val hHours = if (att != null && att.hourlyHours > 0.0) att.hourlyHours else worker.hourlyHours
+                                val hHours = if (att != null && att.hourlyHours > 0.0) att.hourlyHours else (if (worker.hourlyHours > 0.0) worker.hourlyHours else 0.0)
                                 val hasHourly = hHours > 0.0
 
                                 Row(
@@ -408,37 +494,40 @@ fun AttendanceScreen(
                                             )
                                             val statusDetails = buildList {
                                                 add(worker.role)
-                                                if (isFullDay) add("تمام روز")
+                                                if (isHourlyChecked) add("ساعتی")
+                                                else if (isFullDay) add("تمام روز")
                                                 else if (isHalfDay) add("نصف روز")
                                                 else if (isAbsent) add("غایب")
-                                                if (hasHourly) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی")
+                                                if (hasHourly && !isHourlyChecked) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی")
                                                 if (hasOvertime) add("+${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))}س اضافه")
                                             }.joinToString(" • ")
 
                                             Text(
                                                 text = statusDetails,
                                                 fontSize = 9.5.sp,
-                                                color = if (isAbsent) RoseAccent else if (isHalfDay) AmberAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                color = if (isAbsent) RoseAccent else if (isHalfDay) AmberAccent else if (isHourlyChecked) CyanAccent else MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                                 overflow = TextOverflow.Ellipsis
                                             )
                                         }
                                     }
 
-                                    // Action Checkboxes: Full Day, Half Day, Absent + 3-dots Menu
+                                    // Action Checkboxes: Full Day, Half Day, Hourly, Absent + 3-dots Menu
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         // 1. Full Day Presence Checkbox
                                         Box(
-                                            modifier = Modifier.width(42.dp),
+                                            modifier = Modifier.width(38.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
                                                 checked = isFullDay,
                                                 onCheckedChange = {
-                                                    viewModel.setAttendanceStatus(worker, targetDate, "FULL")
+                                                    if (!isHourlyWorker) {
+                                                        viewModel.setAttendanceStatus(worker, targetDate, "FULL")
+                                                    }
                                                 },
                                                 colors = CheckboxDefaults.colors(
                                                     checkedColor = EmeraldAccent,
@@ -451,13 +540,15 @@ fun AttendanceScreen(
 
                                         // 2. Half Day Presence Checkbox
                                         Box(
-                                            modifier = Modifier.width(42.dp),
+                                            modifier = Modifier.width(38.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
                                                 checked = isHalfDay,
                                                 onCheckedChange = {
-                                                    viewModel.setAttendanceStatus(worker, targetDate, "HALF")
+                                                    if (!isHourlyWorker) {
+                                                        viewModel.setAttendanceStatus(worker, targetDate, "HALF")
+                                                    }
                                                 },
                                                 colors = CheckboxDefaults.colors(
                                                     checkedColor = AmberAccent,
@@ -468,9 +559,32 @@ fun AttendanceScreen(
                                             )
                                         }
 
-                                        // 3. Absence Checkbox
+                                        // 3. Hourly Presence Checkbox - بین نصف روز و غیبت
                                         Box(
-                                            modifier = Modifier.width(36.dp),
+                                            modifier = Modifier.width(38.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Checkbox(
+                                                checked = isHourlyChecked,
+                                                onCheckedChange = {
+                                                    if (!worker.isHourlyEnabled || (worker.hourlyWageRate <= 0 && worker.baseHourlyWage <= 0)) {
+                                                        showHourlyProfileRequiredDialog = true
+                                                    } else {
+                                                        viewModel.setAttendanceStatus(worker, targetDate, "HOURLY")
+                                                    }
+                                                },
+                                                colors = CheckboxDefaults.colors(
+                                                    checkedColor = CyanAccent,
+                                                    checkmarkColor = Color.White,
+                                                    uncheckedColor = CyanAccent.copy(alpha = 0.45f)
+                                                ),
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+
+                                        // 4. Absence Checkbox
+                                        Box(
+                                            modifier = Modifier.width(34.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Checkbox(
@@ -490,7 +604,7 @@ fun AttendanceScreen(
                                         // 3-dots Menu Button (سه نقطه با گزینه حذف و کپی)
                                         var menuExpanded by remember { mutableStateOf(false) }
                                         Box(
-                                            modifier = Modifier.width(28.dp),
+                                            modifier = Modifier.width(26.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             IconButton(
@@ -565,34 +679,10 @@ fun AttendanceScreen(
                                 )
                             }
 
-                            // مجموع پرداختی روز: محاسبه دقیق با لحاظ نصف‌روز، غیبت، و کم و زیاد شدن ایاب و ذهاب، مسکن و غیره
+                            // مجموع پرداختی روز: محاسبه دقیق و یکپارچه با استفاده از WageCalculator
                             val dayTotalPayout = dayWorkers.sumOf { worker ->
                                 val att = attendanceList.firstOrNull { it.workerId == worker.id && it.date == targetDate }
-                                val isAbsent = (att != null && (att.regularHours == 0.0 || att.notes == "غیبت"))
-                                val isHalfDay = (att != null && (att.regularHours == 4.0 || att.notes == "نصف روز"))
-                                if (isAbsent) {
-                                    0L
-                                } else {
-                                    val baseWage = when {
-                                        isHalfDay -> if (att?.dailyWage != null && att.dailyWage > 0) att.dailyWage else worker.baseDailyWage / 2
-                                        att != null && att.dailyWage > 0 -> att.dailyWage
-                                        else -> worker.baseDailyWage
-                                    }
-                                    val hHours = if (att != null && att.hourlyHours > 0) att.hourlyHours else worker.hourlyHours
-                                    val hRate = if (att != null && att.hourlyWageRate > 0) att.hourlyWageRate else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage)
-                                    val hourlyPay = (hHours * hRate).toLong()
-
-                                    val otHours = if (att != null && att.overtimeHours > 0) att.overtimeHours else worker.overtimeHours
-                                    val otRate = if (att != null && att.overtimeRate > 0) att.overtimeRate else worker.overtimeRate
-                                    val otPay = (otHours * otRate).toLong()
-
-                                    val transit = if (worker.transitImpact == "ALLOWANCE") worker.transitAllowance else -worker.transitAllowance
-                                    val accom = if (worker.accommodationImpact == "ALLOWANCE") worker.accommodationAllowance else -worker.accommodationAllowance
-                                    val food = if (worker.foodImpact == "ALLOWANCE") worker.foodAllowance else -worker.foodAllowance
-                                    val med = if (worker.medicalImpact == "ALLOWANCE") worker.medicalAllowance else -worker.medicalAllowance
-
-                                    (baseWage + hourlyPay + otPay + transit + accom + food + med).coerceAtLeast(0L)
-                                }
+                                WageCalculator.calculateDayPayout(worker, att)
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -621,10 +711,47 @@ fun AttendanceScreen(
                 }
             }
         }
+    }
+
+    // Dialog: نیاز به تکمیل پروفایل کارگر برای دستمزد ساعتی
+    if (showHourlyProfileRequiredDialog) {
+        AlertDialog(
+            onDismissRequest = { showHourlyProfileRequiredDialog = false },
+            title = {
+                Text(
+                    text = "تکمیل پروفایل کارگر ساعتی",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "باید اول داخل پروفایل قسمت دستمزد ساعتی پر شود تا اجازه زدن تیک دستمزد ساعتی در قسمت حضور غیاب داده شود.",
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showHourlyProfileRequiredDialog = false }) {
+                    Text("متوجه شدم", fontWeight = FontWeight.Bold, color = AmberAccent)
+                }
+            },
+            shape = RoundedCornerShape(16.dp),
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
         // FAB to add a worker directly into this day and workplace
         FloatingActionButton(
-            onClick = { isAddingWorker = true },
+            onClick = {
+                if (dateFolders.isEmpty() || activeDayFolder == null) {
+                    showMustCreateDayDialog = true
+                } else {
+                    isAddingWorker = true
+                }
+            },
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(20.dp)
@@ -636,20 +763,67 @@ fun AttendanceScreen(
         }
     }
 
-    // Dialog: Add new worker using AddEditWorkerDialog with auto-created date folder
-    if (isAddingWorker) {
+    // Dialog: Add new worker using AddEditWorkerDialog
+    if (isAddingWorker && activeDayFolder != null) {
         AddEditWorkerDialog(
             initialWorker = null,
-            initialDate = activeDayFolder?.date ?: JalaliCalendar.todayString(),
-            initialDayOfWeek = activeDayFolder?.dayOfWeek ?: JalaliCalendar.getDayOfWeek(activeDayFolder?.date ?: JalaliCalendar.todayString()),
+            initialDate = activeDayFolder.date,
+            initialDayOfWeek = activeDayFolder.dayOfWeek,
             onDismiss = { isAddingWorker = false },
             onConfirm = { newWorker ->
                 viewModel.addWorkerWithDate(
                     worker = newWorker,
-                    workDate = newWorker.workDate.ifBlank { JalaliCalendar.todayString() },
-                    dayOfWeek = newWorker.dayOfWeek.ifBlank { JalaliCalendar.getDayOfWeek(newWorker.workDate.ifBlank { JalaliCalendar.todayString() }) }
+                    workDate = newWorker.workDate.ifBlank { activeDayFolder.date },
+                    dayOfWeek = newWorker.dayOfWeek.ifBlank { activeDayFolder.dayOfWeek }
                 )
                 isAddingWorker = false
+            }
+        )
+    }
+
+    // Dialog: Must Create Day First before adding worker
+    if (showMustCreateDayDialog) {
+        AlertDialog(
+            onDismissRequest = { showMustCreateDayDialog = false },
+            icon = {
+                Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = AmberAccent, modifier = Modifier.size(28.dp))
+            },
+            title = {
+                Text(
+                    text = "تعریف روز کاری الزامی است",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            },
+            text = {
+                Text(
+                    text = "قبل از افزودن کارگر، ابتدا باید یک روز کاری ثبت نمایید تا وضعیت کارکرد و حضور و غیاب کارگر در آن روز ثبت شود.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 20.sp
+                )
+            },
+            confirmButton = {
+                LoadingButton(
+                    text = "ساخت روز کاری",
+                    icon = Icons.Default.Add,
+                    onClick = {
+                        showMustCreateDayDialog = false
+                        isCreatingNextDay = true
+                    },
+                    containerColor = AmberAccent,
+                    height = 38.dp,
+                    fontSize = 12.sp
+                )
+            },
+            dismissButton = {
+                LoadingOutlinedButton(
+                    text = "انصراف",
+                    onClick = { showMustCreateDayDialog = false },
+                    height = 38.dp,
+                    fontSize = 12.sp
+                )
             }
         )
     }
@@ -676,7 +850,7 @@ fun AttendanceScreen(
                 viewModel.addDateFolder(
                     date = date,
                     dayOfWeek = dayOfWeek,
-                    title = "شیفت کاری"
+                    title = "روز کاری"
                 )
                 isCreatingNextDay = false
             }
