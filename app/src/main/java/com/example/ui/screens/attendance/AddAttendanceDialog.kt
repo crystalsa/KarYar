@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.local.entity.AttendanceEntity
+import com.example.data.local.entity.AttendanceStatus
 import com.example.data.local.entity.WorkerEntity
 import com.example.data.local.entity.WorkplaceFolderEntity
 import com.example.ui.components.HairlineCard
@@ -451,6 +452,8 @@ fun AddAttendanceDialog(
                                 folderId = folder?.id ?: 1L,
                                 workerId = worker.id,
                                 date = date.trim(),
+                                epochDay = JalaliCalendar.toEpochDay(date.trim()),
+                                status = if (isHourly) AttendanceStatus.HOURLY else if (finalRegHours == 4.0) AttendanceStatus.HALF_DAY else AttendanceStatus.FULL_DAY,
                                 entryTime = entryTime.trim(),
                                 exitTime = exitTime.trim(),
                                 regularHours = finalRegHours,

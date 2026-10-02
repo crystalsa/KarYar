@@ -169,7 +169,7 @@ object PdfExportUtil {
         canvas.drawText("• کل اضافه کاری ثبت‌شده: ${analytics.totalOvertimeHours} ساعت", 45f, rowY + 65f, paint)
 
         canvas.drawText("• تعداد کارگران فعال: ${analytics.activeWorkersCount} نفر", 280f, rowY + 45f, paint)
-        canvas.drawText("• مجموع روزهای کاری ثبت‌شده: ${analytics.todayAttendanceCount} رکورد تردد", 280f, rowY + 65f, paint)
+        canvas.drawText("• مجموع روزهای کاری ثبت‌شده: ${analytics.totalWorkDaysCount} روز کاری", 280f, rowY + 65f, paint)
 
         // 6. Signature Lines at bottom
         val sigY = 760f

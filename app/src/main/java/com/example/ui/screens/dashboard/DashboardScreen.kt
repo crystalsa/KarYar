@@ -71,6 +71,7 @@ import com.example.ui.theme.Slate100
 import com.example.ui.theme.Slate200
 import com.example.util.Formatters
 import com.example.util.JalaliCalendar
+import com.example.util.WageCalculator
 
 @Composable
 fun DashboardScreen(
@@ -469,8 +470,14 @@ fun DashboardScreen(
                 }
             }
         } else {
-            items(recentAttendance.take(5)) { att ->
+            items(recentAttendance.take(10)) { att ->
                 val worker = workerMap[att.workerId]
+                val dayCalc = if (worker != null) WageCalculator.calculateDay(worker, att) else null
+                val isAbsent = if (worker != null) WageCalculator.isAbsent(worker, att) else false
+                val isHourly = if (worker != null) WageCalculator.isHourly(worker, att) else (att.hourlyHours > 0 || att.hourlyWage > 0)
+                val isHalf = if (worker != null) WageCalculator.isHalfDay(worker, att) else false
+                val netPayout = dayCalc?.netPayout ?: (if (att.dailyWage > 0L) att.dailyWage else (att.hourlyHours * att.hourlyWage).toLong())
+
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
@@ -482,7 +489,10 @@ fun DashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -498,12 +508,22 @@ fun DashboardScreen(
                             }
                             Spacer(modifier = Modifier.width(10.dp))
                             Column {
-                                Text(
-                                    text = worker?.name ?: "کارگر",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = worker?.name ?: "کارگر",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (worker?.role?.isNotBlank() == true) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "(${worker.role})",
+                                            fontSize = 11.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
                                     text = "${Formatters.toPersianDigits(att.date)} | ورود: ${Formatters.toPersianDigits(att.entryTime)} - خروج: ${Formatters.toPersianDigits(att.exitTime)}",
@@ -511,7 +531,7 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    text = "محل: ${att.workplaceName} (سرکارگر: ${att.foremanName})",
+                                    text = "محل: ${att.workplaceName.ifBlank { "کارگاه" }} (سرکارگر: ${att.foremanName.ifBlank { "تعیین نشده" }})",
                                     fontSize = 11.sp,
                                     color = CyanAccent
                                 )
@@ -519,18 +539,47 @@ fun DashboardScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(
-                                text = Formatters.formatCurrency(att.dailyWage),
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldAccent
-                            )
-                            if (att.overtimeHours > 0) {
+                            if (isAbsent) {
                                 Text(
-                                    text = "+${Formatters.toPersianDigits(att.overtimeHours)}h اضافه کار",
-                                    fontSize = 11.sp,
-                                    color = AmberAccent
+                                    text = "غایب (۰ تومان)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RoseAccent
                                 )
+                            } else {
+                                Text(
+                                    text = Formatters.formatCurrency(netPayout),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldAccent
+                                )
+                            }
+
+                            if (!isAbsent) {
+                                if (isHourly) {
+                                    val hHours = dayCalc?.hourlyHours ?: att.hourlyHours
+                                    Text(
+                                        text = if (hHours > 0) "ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت" else "ساعتی",
+                                        fontSize = 10.5.sp,
+                                        color = CyanAccent,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                } else if (isHalf) {
+                                    Text(
+                                        text = "نصف روز",
+                                        fontSize = 10.5.sp,
+                                        color = AmberAccent,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+
+                                if (att.overtimeHours > 0) {
+                                    Text(
+                                        text = "+${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))}h اضافه کار",
+                                        fontSize = 10.5.sp,
+                                        color = AmberAccent
+                                    )
+                                }
                             }
                         }
                     }

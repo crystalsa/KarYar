@@ -200,6 +200,36 @@ object JalaliCalendar {
         return Triple(gy, gm + 1, gd)
     }
 
+    /**
+     * Converts a Jalali date string (e.g. 1405/01/15) to epochDay (days since 1970-01-01 UTC).
+     */
+    fun toEpochDay(dateStr: String): Long {
+        return try {
+            val (jy, jm, jd) = parseDate(dateStr)
+            val (gy, gm, gd) = jalaliToGregorian(jy, jm, jd)
+            val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+            cal.clear()
+            cal.set(gy, gm - 1, gd)
+            cal.timeInMillis / 86400000L
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    /**
+     * Converts epochDay to JalaliDate.
+     */
+    fun fromEpochDay(epochDay: Long): JalaliDate {
+        val cal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        cal.clear()
+        cal.timeInMillis = epochDay * 86400000L
+        return gregorianToJalali(
+            cal.get(Calendar.YEAR),
+            cal.get(Calendar.MONTH) + 1,
+            cal.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
     fun getDayOfWeek(dateStr: String): String {
         return try {
             val eng = toEnglishDigits(dateStr)

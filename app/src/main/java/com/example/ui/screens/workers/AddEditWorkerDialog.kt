@@ -109,15 +109,13 @@ fun AddEditWorkerDialog(
 ) {
     var workDate by remember {
         mutableStateOf(
-            if (!initialWorker?.workDate.isNullOrBlank()) initialWorker!!.workDate
-            else if (!initialDate.isNullOrBlank()) initialDate!!
+            if (!initialDate.isNullOrBlank()) initialDate
             else JalaliCalendar.todayString()
         )
     }
     var dayOfWeek by remember {
         mutableStateOf(
-            if (!initialWorker?.dayOfWeek.isNullOrBlank()) initialWorker!!.dayOfWeek
-            else if (!initialDayOfWeek.isNullOrBlank()) initialDayOfWeek!!
+            if (!initialDayOfWeek.isNullOrBlank()) initialDayOfWeek
             else JalaliCalendar.getDayOfWeek(workDate)
         )
     }
@@ -311,8 +309,6 @@ fun AddEditWorkerDialog(
             val finalNationalId = if (isNationalIdEnabled) nationalId.trim() else ""
 
             val entity = (initialWorker ?: WorkerEntity(name = name, role = role)).copy(
-                workDate = workDate,
-                dayOfWeek = dayOfWeek,
                 name = name.trim(),
                 role = role.trim(),
                 phone = finalPhone,

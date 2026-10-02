@@ -130,6 +130,7 @@ fun WorkerManagementApp(
     var selectedTab by remember { mutableStateOf(MainTab.DASHBOARD) }
     var showTopMenu by remember { mutableStateOf(false) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showSampleConfirm by remember { mutableStateOf(false) }
 
     // Intercept hardware back button when inside a folder to return to FoldersScreen
     BackHandler(enabled = currentFolder != null) {
@@ -290,7 +291,7 @@ fun WorkerManagementApp(
                                 },
                                 onClick = {
                                     showTopMenu = false
-                                    viewModel.loadSampleData()
+                                    showSampleConfirm = true
                                 },
                                 modifier = Modifier.testTag("top_menu_load_sample_data")
                             )
@@ -517,6 +518,30 @@ fun WorkerManagementApp(
             },
             dismissButton = {
                 TextButton(onClick = { showClearConfirm = false }) {
+                    Text("انصراف")
+                }
+            }
+        )
+    }
+
+    if (showSampleConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSampleConfirm = false },
+            title = { Text("بارگذاری داده‌های نمونه") },
+            text = { Text("همه داده‌های فعلی پاک می‌شود. آیا مطمئن هستید که می‌خواهید داده‌های نمونه را بارگذاری کنید؟") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.loadSampleData(clearFirst = true)
+                        showSampleConfirm = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldAccent)
+                ) {
+                    Text("بارگذاری داده نمونه", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSampleConfirm = false }) {
                     Text("انصراف")
                 }
             }

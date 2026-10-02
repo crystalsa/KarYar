@@ -17,7 +17,8 @@ import androidx.room.PrimaryKey
     ],
     indices = [
         Index(value = ["folderId"]),
-        Index(value = ["folderId", "date"])
+        Index(value = ["folderId", "date"]),
+        Index(value = ["epochDay"])
     ]
 )
 data class DateFolderEntity(
@@ -28,5 +29,6 @@ data class DateFolderEntity(
     val dayOfWeek: String,          // روز هفته مثلا شنبه، یکشنبه، ...
     val title: String = "",         // عنوان اختیاری مثلا: بتن‌ریزی سقف اول
     val notes: String = "",         // توضیحات روز
-    val createdAt: Long = System.currentTimeMillis()
+    val createdAt: Long = System.currentTimeMillis(),
+    val epochDay: Long = 0L         // تاریخ به صورت epochDay برای فیلتر و مرتب‌سازی دقیق
 )

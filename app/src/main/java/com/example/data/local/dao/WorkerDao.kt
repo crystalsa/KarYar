@@ -32,11 +32,13 @@ interface WorkerDao {
     @Update
     suspend fun updateWorker(worker: WorkerEntity)
 
-    @Query("SELECT * FROM workers WHERE dateFolderId = :dateFolderId ORDER BY id DESC")
+    @Query("""
+        SELECT DISTINCT w.* FROM workers w 
+        INNER JOIN attendance a ON w.id = a.workerId 
+        WHERE a.dateFolderId = :dateFolderId 
+        ORDER BY w.id DESC
+    """)
     fun getWorkersByDateFolder(dateFolderId: Long): Flow<List<WorkerEntity>>
-
-    @Query("DELETE FROM workers WHERE dateFolderId = :dateFolderId")
-    suspend fun deleteWorkersByDateFolder(dateFolderId: Long)
 
     @Delete
     suspend fun deleteWorker(worker: WorkerEntity)

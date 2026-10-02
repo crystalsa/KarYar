@@ -26,6 +26,15 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance WHERE folderId = :folderId AND date = :date ORDER BY id DESC")
     fun getAttendanceForDateInFolder(folderId: Long, date: String): Flow<List<AttendanceEntity>>
 
+    @Query("SELECT * FROM attendance WHERE workerId = :workerId AND date = :date LIMIT 1")
+    suspend fun getAttendanceForWorkerAndDate(workerId: Long, date: String): AttendanceEntity?
+
+    @Query("SELECT * FROM attendance WHERE dateFolderId = :dateFolderId ORDER BY id ASC")
+    fun getAttendanceByDateFolder(dateFolderId: Long): Flow<List<AttendanceEntity>>
+
+    @Query("SELECT * FROM attendance WHERE folderId = :folderId AND epochDay BETWEEN :startEpoch AND :endEpoch ORDER BY epochDay ASC")
+    fun getAttendanceBetweenEpochDays(folderId: Long, startEpoch: Long, endEpoch: Long): Flow<List<AttendanceEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAttendance(attendance: AttendanceEntity): Long
 
@@ -37,6 +46,9 @@ interface AttendanceDao {
 
     @Query("DELETE FROM attendance WHERE folderId = :folderId")
     suspend fun deleteAttendanceByFolder(folderId: Long)
+
+    @Query("DELETE FROM attendance WHERE dateFolderId = :dateFolderId")
+    suspend fun deleteAttendanceByDateFolder(dateFolderId: Long)
 
     @Query("DELETE FROM attendance")
     suspend fun clearAll()

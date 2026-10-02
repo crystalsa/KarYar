@@ -736,8 +736,8 @@ fun WorkersScreen(
             // Worker Cards
             items(filteredWorkers, key = { it.id }) { worker ->
                 val perf = performances.find { it.worker.id == worker.id }
-                val cardTargetDate = targetDayFolder?.date ?: worker.workDate
-                val cardTargetDayOfWeek = targetDayFolder?.dayOfWeek ?: worker.dayOfWeek
+                val cardTargetDate = targetDayFolder?.date ?: JalaliCalendar.todayString()
+                val cardTargetDayOfWeek = targetDayFolder?.dayOfWeek ?: JalaliCalendar.getDayOfWeek(cardTargetDate)
                 val att = if (cardTargetDate.isNotBlank()) {
                     attendanceList.firstOrNull { it.workerId == worker.id && it.date == cardTargetDate }
                 } else null
@@ -765,8 +765,8 @@ fun WorkersScreen(
             onConfirm = { newWorker ->
                 viewModel.addWorkerWithDate(
                     worker = newWorker,
-                    workDate = newWorker.workDate.ifBlank { activeDayFolder.date },
-                    dayOfWeek = newWorker.dayOfWeek.ifBlank { activeDayFolder.dayOfWeek }
+                    workDate = activeDayFolder.date,
+                    dayOfWeek = activeDayFolder.dayOfWeek
                 )
                 isAddingWorker = false
             }

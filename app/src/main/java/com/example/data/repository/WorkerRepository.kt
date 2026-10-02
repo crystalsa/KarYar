@@ -1,11 +1,14 @@
 package com.example.data.repository
 
+import androidx.room.withTransaction
+import com.example.data.local.AppDatabase
 import com.example.data.local.dao.AttendanceDao
 import com.example.data.local.dao.DateFolderDao
 import com.example.data.local.dao.ExpenseDao
 import com.example.data.local.dao.WorkerDao
 import com.example.data.local.dao.WorkplaceFolderDao
 import com.example.data.local.entity.AttendanceEntity
+import com.example.data.local.entity.AttendanceStatus
 import com.example.data.local.entity.DateFolderEntity
 import com.example.data.local.entity.ExpenseEntity
 import com.example.data.local.entity.WorkerEntity
@@ -14,6 +17,7 @@ import com.example.util.JalaliCalendar
 import kotlinx.coroutines.flow.Flow
 
 class WorkerRepository(
+    private val database: AppDatabase,
     private val folderDao: WorkplaceFolderDao,
     private val dateFolderDao: DateFolderDao,
     private val workerDao: WorkerDao,
@@ -34,20 +38,16 @@ class WorkerRepository(
     suspend fun insertDateFolder(dateFolder: DateFolderEntity): Long = dateFolderDao.insertDateFolder(dateFolder)
     suspend fun updateDateFolder(dateFolder: DateFolderEntity) = dateFolderDao.updateDateFolder(dateFolder)
     suspend fun getDateFolderByDate(folderId: Long, date: String): DateFolderEntity? = dateFolderDao.getDateFolderByDate(folderId, date)
-    suspend fun deleteDateFolder(dateFolder: DateFolderEntity) {
+    suspend fun deleteDateFolder(dateFolder: DateFolderEntity) = database.withTransaction {
+        attendanceDao.deleteAttendanceByDateFolder(dateFolder.id)
         dateFolderDao.deleteDateFolder(dateFolder)
-        workerDao.deleteWorkersByDateFolder(dateFolder.id)
     }
 
-    suspend fun deleteFolder(folder: WorkplaceFolderEntity) {
+    suspend fun deleteFolder(folder: WorkplaceFolderEntity) = database.withTransaction {
         folderDao.deleteFolder(folder)
-        dateFolderDao.deleteDateFoldersByFolder(folder.id)
-        workerDao.deleteWorkersByFolder(folder.id)
-        attendanceDao.deleteAttendanceByFolder(folder.id)
-        expenseDao.deleteExpensesByFolder(folder.id)
     }
 
-    suspend fun duplicateFolder(folder: WorkplaceFolderEntity): Long {
+    suspend fun duplicateFolder(folder: WorkplaceFolderEntity): Long = database.withTransaction {
         val newFolderId = folderDao.insertFolder(
             folder.copy(
                 id = 0,
@@ -64,14 +64,23 @@ class WorkerRepository(
             workerIdMap[w.id] = newWId
         }
 
+        val dateFolders = dateFolderDao.getDateFoldersByFolderSync(folder.id)
+        val dateFolderIdMap = mutableMapOf<Long, Long>()
+        for (df in dateFolders) {
+            val newDfId = dateFolderDao.insertDateFolder(df.copy(id = 0, folderId = newFolderId))
+            dateFolderIdMap[df.id] = newDfId
+        }
+
         val attendances = attendanceDao.getAttendanceByFolderSync(folder.id)
         for (att in attendances) {
             val mappedWorkerId = workerIdMap[att.workerId] ?: continue
+            val mappedDateFolderId = dateFolderIdMap[att.dateFolderId] ?: 0L
             attendanceDao.insertAttendance(
                 att.copy(
                     id = 0,
                     folderId = newFolderId,
                     workerId = mappedWorkerId,
+                    dateFolderId = mappedDateFolderId,
                     workplaceName = "${folder.name} (کپی)"
                 )
             )
@@ -90,7 +99,84 @@ class WorkerRepository(
             )
         }
 
-        return newFolderId
+        newFolderId
+    }
+
+    suspend fun createNextDay(
+        folderId: Long,
+        date: String,
+        dayOfWeek: String,
+        title: String = "روز کاری",
+        notes: String = ""
+    ): Long = database.withTransaction {
+        val newDfId = dateFolderDao.insertDateFolder(
+            DateFolderEntity(
+                folderId = folderId,
+                date = date,
+                dayOfWeek = dayOfWeek,
+                title = title,
+                notes = notes,
+                epochDay = JalaliCalendar.toEpochDay(date)
+            )
+        )
+        val activeWorkers = workerDao.getWorkersByFolderSync(folderId).filter { it.isActive }
+        for (w in activeWorkers) {
+            val isHourly = w.isHourlyEnabled
+            val attStatus = if (isHourly) AttendanceStatus.HOURLY else AttendanceStatus.FULL_DAY
+            attendanceDao.insertAttendance(
+                AttendanceEntity(
+                    folderId = folderId,
+                    workerId = w.id,
+                    dateFolderId = newDfId,
+                    date = date,
+                    epochDay = JalaliCalendar.toEpochDay(date),
+                    status = attStatus,
+                    dailyWage = if (isHourly) 0L else w.baseDailyWage,
+                    hourlyWage = if (w.hourlyWageRate > 0) w.hourlyWageRate else w.baseHourlyWage,
+                    hourlyWageRate = w.hourlyWageRate,
+                    hourlyHours = w.hourlyHours,
+                    overtimeHours = w.overtimeHours,
+                    overtimeRate = w.overtimeRate,
+                    regularHours = if (isHourly) 0.0 else 8.0,
+                    notes = ""
+                )
+            )
+        }
+        newDfId
+    }
+
+    suspend fun duplicateWorker(
+        worker: WorkerEntity,
+        targetDate: String,
+        targetDateFolderId: Long
+    ): Long = database.withTransaction {
+        val newWorkerId = workerDao.insertWorker(
+            worker.copy(
+                id = 0,
+                name = "${worker.name} (کپی)"
+            )
+        )
+        val isHourly = worker.isHourlyEnabled
+        val attStatus = if (isHourly) AttendanceStatus.HOURLY else AttendanceStatus.FULL_DAY
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = worker.folderId,
+                workerId = newWorkerId,
+                dateFolderId = targetDateFolderId,
+                date = targetDate,
+                epochDay = JalaliCalendar.toEpochDay(targetDate),
+                status = attStatus,
+                dailyWage = if (isHourly) 0L else worker.baseDailyWage,
+                hourlyWage = if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage,
+                hourlyWageRate = worker.hourlyWageRate,
+                hourlyHours = worker.hourlyHours,
+                overtimeHours = worker.overtimeHours,
+                overtimeRate = worker.overtimeRate,
+                regularHours = if (isHourly) 0.0 else 8.0,
+                notes = ""
+            )
+        )
+        newWorkerId
     }
 
     suspend fun insertWorker(worker: WorkerEntity): Long = workerDao.insertWorker(worker)
@@ -116,10 +202,9 @@ class WorkerRepository(
      * Loads rich, accurate sample data with at least 5 workers per workplace folder,
      * including realistic 11-digit phone numbers, 10-digit national IDs, hourly rates,
      * overtime rates and hours, attendance records, and expenses.
+     * Does NOT clear existing data automatically.
      */
     suspend fun loadSampleData() {
-        clearAllData()
-
         val todayJalali = JalaliCalendar.todayString()
         val yesterdayJalali = JalaliCalendar.fromTimestamp(System.currentTimeMillis() - 86400000L).format()
         val twoDaysAgoJalali = JalaliCalendar.fromTimestamp(System.currentTimeMillis() - 172800000L).format()
@@ -162,9 +247,6 @@ class WorkerRepository(
         val w1Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
-                dateFolderId = df1Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "علی رضایی",
                 role = "استادکار بنا",
                 phone = "09121112233",
@@ -188,9 +270,6 @@ class WorkerRepository(
         val w2Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
-                dateFolderId = df1Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "حسین مرادی",
                 role = "آرماتوربند",
                 phone = "09359876543",
@@ -214,9 +293,6 @@ class WorkerRepository(
         val w3Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
-                dateFolderId = df1Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "رضا کریمی",
                 role = "کارگر ساده",
                 phone = "09194445566",
@@ -238,9 +314,6 @@ class WorkerRepository(
         val w4Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
-                dateFolderId = df1Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "سعید احمدی",
                 role = "جوشکار اسکلت فلزی",
                 phone = "09123334455",
@@ -264,9 +337,6 @@ class WorkerRepository(
         val w5Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
-                dateFolderId = df1Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "مجتبی بیات",
                 role = "تأسیسات و لوله‌کش",
                 phone = "09187778899",
@@ -420,9 +490,6 @@ class WorkerRepository(
         val w6Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder2Id,
-                dateFolderId = df2Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "مهدی کاظمی",
                 role = "تکنسین برق صنعتی",
                 phone = "09129998877",
@@ -444,9 +511,6 @@ class WorkerRepository(
         val w7Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder2Id,
-                dateFolderId = df2Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "بهزاد رستمی",
                 role = "گچ‌کار و ابزارزن",
                 phone = "09361114477",
@@ -468,9 +532,6 @@ class WorkerRepository(
         val w8Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder2Id,
-                dateFolderId = df2Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "فرزاد اکبری",
                 role = "نقاش ساختمان",
                 phone = "09192226688",
@@ -492,9 +553,6 @@ class WorkerRepository(
         val w9Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder2Id,
-                dateFolderId = df2Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "میلاد عباسی",
                 role = "کاشی‌کار و سرامیک‌کار",
                 phone = "09128883344",
@@ -516,9 +574,6 @@ class WorkerRepository(
         val w10Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder2Id,
-                dateFolderId = df2Saturday,
-                workDate = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
                 name = "امید حسینی",
                 role = "نصاب درب ضدحریق و پنجره",
                 phone = "09375551122",

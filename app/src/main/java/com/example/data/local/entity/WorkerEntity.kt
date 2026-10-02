@@ -1,24 +1,28 @@
 package com.example.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "workers",
+    foreignKeys = [
+        ForeignKey(
+            entity = WorkplaceFolderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["folderId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
-        Index(value = ["folderId"]),
-        Index(value = ["dateFolderId"]),
-        Index(value = ["workDate"])
+        Index(value = ["folderId"])
     ]
 )
 data class WorkerEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val folderId: Long = 0L,         // شناسه پوشه محل کار
-    val dateFolderId: Long = 0L,     // شناسه پوشه تاریخ و روز هفته
-    val workDate: String = "",       // تاریخ شمسی مثلا 1405/01/15
-    val dayOfWeek: String = "",      // روز هفته مثلا شنبه
     val name: String,
     val role: String,                // مثلا بنا، آرماتوربند، کارگر ساده، گچ‌کار، برق‌کار
     val phone: String = "",          // حداکثر ۱۱ رقم فقط عددی

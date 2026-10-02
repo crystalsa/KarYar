@@ -4,6 +4,7 @@ data class DashboardAnalytics(
     val totalWorkersCount: Int = 0,
     val activeWorkersCount: Int = 0,
     val todayAttendanceCount: Int = 0,
+    val totalWorkDaysCount: Int = 0,
     val totalWorkHours: Double = 0.0,
     val totalOvertimeHours: Double = 0.0,
     // Costs

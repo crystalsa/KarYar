@@ -773,8 +773,8 @@ fun AttendanceScreen(
             onConfirm = { newWorker ->
                 viewModel.addWorkerWithDate(
                     worker = newWorker,
-                    workDate = newWorker.workDate.ifBlank { activeDayFolder.date },
-                    dayOfWeek = newWorker.dayOfWeek.ifBlank { activeDayFolder.dayOfWeek }
+                    workDate = activeDayFolder.date,
+                    dayOfWeek = activeDayFolder.dayOfWeek
                 )
                 isAddingWorker = false
             }

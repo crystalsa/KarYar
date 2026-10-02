@@ -84,6 +84,7 @@ fun FoldersScreen(
     var editingFolder by remember { mutableStateOf<WorkplaceFolderEntity?>(null) }
     var deletingFolder by remember { mutableStateOf<WorkplaceFolderEntity?>(null) }
     var showConfirmClearAll by remember { mutableStateOf(false) }
+    var showSampleConfirm by remember { mutableStateOf(false) }
 
     Box(modifier = modifier.fillMaxSize()) {
         LazyColumn(
@@ -134,7 +135,7 @@ fun FoldersScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 LoadingButton(
-                                    text = "ساخت پوشه",
+                                    text = "ساخت اولین پوشه",
                                     icon = Icons.Default.Add,
                                     onClick = { isCreatingFolder = true },
                                     containerColor = AmberAccent,
@@ -144,9 +145,9 @@ fun FoldersScreen(
                                 )
 
                                 LoadingButton(
-                                    text = "داده‌های نمونه",
+                                    text = "بارگذاری داده نمونه",
                                     icon = Icons.Default.PlaylistAdd,
-                                    onClick = { viewModel.loadSampleData() },
+                                    onClick = { showSampleConfirm = true },
                                     containerColor = EmeraldAccent,
                                     modifier = Modifier.weight(1f),
                                     height = 42.dp,
@@ -274,6 +275,37 @@ fun FoldersScreen(
                 LoadingOutlinedButton(
                     text = "انصراف",
                     onClick = { showConfirmClearAll = false },
+                    height = 38.dp,
+                    fontSize = 12.sp
+                )
+            }
+        )
+    }
+
+    // Load Sample Data Confirmation Dialog
+    if (showSampleConfirm) {
+        AlertDialog(
+            onDismissRequest = { showSampleConfirm = false },
+            title = { Text("بارگذاری داده‌های نمونه", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+            text = { Text("همه داده‌های فعلی پاک می‌شود. آیا مطمئن هستید که می‌خواهید داده‌های نمونه را بارگذاری کنید؟", fontSize = 12.5.sp) },
+            confirmButton = {
+                LoadingButton(
+                    text = "بارگذاری داده نمونه",
+                    icon = Icons.Default.PlaylistAdd,
+                    onClick = {
+                        viewModel.loadSampleData(clearFirst = true)
+                        showSampleConfirm = false
+                    },
+                    containerColor = EmeraldAccent,
+                    height = 38.dp,
+                    fontSize = 12.sp,
+                    testTag = "confirm_load_sample_data_button"
+                )
+            },
+            dismissButton = {
+                LoadingOutlinedButton(
+                    text = "انصراف",
+                    onClick = { showSampleConfirm = false },
                     height = 38.dp,
                     fontSize = 12.sp
                 )

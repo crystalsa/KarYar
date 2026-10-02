@@ -1,15 +1,25 @@
 package com.example.data.local.entity
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "expenses",
+    foreignKeys = [
+        ForeignKey(
+            entity = WorkplaceFolderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["folderId"],
+            onDelete = ForeignKey.CASCADE
+        )
+    ],
     indices = [
         Index(value = ["folderId"]),
         Index(value = ["workerId"]),
-        Index(value = ["date"])
+        Index(value = ["date"]),
+        Index(value = ["epochDay"])
     ]
 )
 data class ExpenseEntity(
@@ -25,6 +35,7 @@ data class ExpenseEntity(
     val amount: Long,               // مبلغ هزینه (تومان)
     val accommodationDays: Int = 0, // مدت زمان اسکان به روز
     val date: String,               // تاریخ شمسی
+    val epochDay: Long = 0L,        // تاریخ به صورت epochDay
     val timestamp: Long = System.currentTimeMillis(),
     val workplaceName: String = "", // نام محل کار / پروژه
     val employerName: String = "",  // نام کارفرما
