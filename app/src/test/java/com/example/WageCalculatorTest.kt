@@ -143,7 +143,7 @@ class WageCalculatorTest {
         assertEquals(0L, result.netPayout)
     }
 
-    // 8. Absent day (status = ABSENT): all wages, overtime, allowances, deductions are 0
+    // 8. Absent day (status = ABSENT): wages, overtime, allowances are 0, but deductions STILL APPLY
     @Test
     fun testAbsent_statusAbsent_zeroWagesAndNotWorkingDay() {
         val workerWithAllowances = baseDailyWorker.copy(
@@ -165,7 +165,7 @@ class WageCalculatorTest {
         assertEquals(0L, result.hourlyPay)
         assertEquals(0L, result.overtimePay)
         assertEquals(0L, result.totalAllowances)
-        assertEquals(0L, result.totalDeductions)
+        assertEquals(30_000L, result.totalDeductions) // Deductions apply to absent workers
         assertEquals(0L, result.netPayout)
     }
 
@@ -455,5 +455,43 @@ class WageCalculatorTest {
         assertEquals(1_000_000L, perf.baseWageTotal)
         assertEquals(100_000L, perf.groupExpenseShare)
         assertEquals(900_000L, perf.netPayout)
+    }
+
+    // 24. Absent worker: wages, overtime, allowances are zero, deductions STILL apply in performance
+    @Test
+    fun testAbsentDay_deductionsApply_allowancesWagesOvertimeDoNotApply() {
+        val worker = baseDailyWorker.copy(
+            transitAllowance = 40_000L,
+            transitImpact = "ALLOWANCE", // Should NOT be paid when absent
+            foodAllowance = 35_000L,
+            foodImpact = "DEDUCTION",    // MUST be deducted even when absent
+            overtimeRate = 120_000L
+        )
+        val dayPresent = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/01",
+            status = AttendanceStatus.FULL_DAY,
+            regularHours = 8.0,
+            overtimeHours = 2.0
+        )
+        val dayAbsent = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/02",
+            status = AttendanceStatus.ABSENT,
+            regularHours = 8.0, // Should be ignored
+            overtimeHours = 3.0  // Overtime should NOT apply to absent day
+        )
+
+        val perf = WageCalculator.calculateWorkerPerformance(worker, listOf(dayPresent, dayAbsent))
+        assertEquals(1, perf.totalShifts) // Only 1 shift worked
+        assertEquals(8.0, perf.regularHours, 0.001)
+        assertEquals(2.0, perf.overtimeHours, 0.001) // Only present day's overtime (2h)
+        assertEquals(1_000_000L, perf.baseWageTotal)
+        assertEquals(240_000L, perf.overtimePayTotal) // 2h * 120,000
+        assertEquals(40_000L, perf.totalAllowances)   // Only present day's allowance (40k * 1)
+        // Deductions apply to BOTH days: 35k * 2 = 70k!
+        assertEquals(70_000L, perf.totalDeductions)
+        // Net: 1,000,000 + 240,000 + 40,000 - 70,000 = 1,210,000
+        assertEquals(1_210_000L, perf.netPayout)
     }
 }

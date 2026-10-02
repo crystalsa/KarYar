@@ -99,7 +99,15 @@ object WageCalculator {
         overtimeMultiplier: Double = DEFAULT_OVERTIME_MULTIPLIER
     ): DayCalculationResult {
         if (isAbsent(worker, att)) {
-            // Rule: Absent day -> all monetary values and hours are 0, not a working day.
+            // Rule: Absent day (کارگر غایب):
+            // - دستمزد روزانه، دستمزد ساعتی، اضافه کاری و مزایا (کمک‌هزینه‌های افزایشی) شامل نمی‌شود (صفر).
+            // - فقط کسورات (کسر ایاب و ذهاب، مسکن، خوراک، درمان) شامل می‌شود.
+            val transitDeduction = if (worker.transitImpact == "DEDUCTION") worker.transitAllowance else 0L
+            val foodDeduction = if (worker.foodImpact == "DEDUCTION") worker.foodAllowance else 0L
+            val accomDeduction = if (worker.accommodationImpact == "DEDUCTION") worker.accommodationAllowance else 0L
+            val medDeduction = if (worker.medicalImpact == "DEDUCTION") worker.medicalAllowance else 0L
+            val totalDeductions = transitDeduction + foodDeduction + accomDeduction + medDeduction
+
             return DayCalculationResult(
                 isWorkingDay = false,
                 regularHours = 0.0,
@@ -109,8 +117,16 @@ object WageCalculator {
                 hourlyPay = 0L,
                 overtimePay = 0L,
                 totalAllowances = 0L,
-                totalDeductions = 0L,
-                netPayout = 0L
+                totalDeductions = totalDeductions,
+                netPayout = 0L,
+                transitAllowance = 0L,
+                foodAllowance = 0L,
+                accommodationAllowance = 0L,
+                medicalAllowance = 0L,
+                transitDeduction = transitDeduction,
+                foodDeduction = foodDeduction,
+                accommodationDeduction = accomDeduction,
+                medicalDeduction = medDeduction
             )
         }
 
@@ -251,12 +267,13 @@ object WageCalculator {
                 foodAllowanceTotal += res.foodAllowance
                 accomAllowanceTotal += res.accommodationAllowance
                 medAllowanceTotal += res.medicalAllowance
-
-                transitDeductionTotal += res.transitDeduction
-                foodDeductionTotal += res.foodDeduction
-                accomDeductionTotal += res.accommodationDeduction
-                medDeductionTotal += res.medicalDeduction
             }
+
+            // کسورات (ایاب و ذهاب، مسکن، خوراک، درمان) حتی در صورت غیبت نیز کسر و محاسبه می‌شوند
+            transitDeductionTotal += res.transitDeduction
+            foodDeductionTotal += res.foodDeduction
+            accomDeductionTotal += res.accommodationDeduction
+            medDeductionTotal += res.medicalDeduction
         }
 
         val totalAllowances = transitAllowanceTotal + foodAllowanceTotal + accomAllowanceTotal + medAllowanceTotal

@@ -1194,50 +1194,14 @@ private fun WorkerItemCard(
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Text(
-                                text = worker.name,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                            val nameTagText = when {
-                                isAbsent -> "غایب"
-                                isHourly -> {
-                                    val hHours = if (attendance != null && attendance.hourlyHours > 0) attendance.hourlyHours
-                                                 else (if (worker.hourlyHours > 0) worker.hourlyHours else 0.0)
-                                    if (hHours > 0) "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی" else "ساعتی"
-                                }
-                                isHalfDay -> "نصف روز"
-                                isFullDay -> "تمام روز"
-                                else -> "تمام روز"
-                            }
-                            val nameTagColor = when {
-                                isAbsent -> RoseAccent
-                                isHourly -> CyanAccent
-                                isHalfDay -> AmberAccent
-                                else -> EmeraldAccent
-                            }
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = nameTagColor.copy(alpha = 0.12f),
-                                border = BorderStroke(0.5.dp, nameTagColor.copy(alpha = 0.35f))
-                            ) {
-                                Text(
-                                    text = nameTagText,
-                                    fontSize = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = nameTagColor,
-                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.5.dp)
-                                )
-                            }
-                        }
+                        Text(
+                            text = worker.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.5.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Text(
                             text = worker.role,
                             fontSize = 11.sp,
@@ -1387,11 +1351,12 @@ private fun WorkerItemCard(
                             )
                         }
                     } else if (isHourly) {
+                        val hourlyTotal = (hHours * hRate).toLong()
                         Text(
-                            text = if (hourlyPay > 0) {
-                                "دستمزد ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (${Formatters.formatCurrency(hRate)})"
+                            text = if (hHours > 0) {
+                                "دستمزد ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(hourlyTotal)}"
                             } else {
-                                "دستمزد ساعتی: ${Formatters.formatCurrency(hRate)}"
+                                "دستمزد ساعتی: (هر ساعت ${Formatters.formatCurrency(hRate)}) = ۰ تومان"
                             },
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
@@ -1421,8 +1386,9 @@ private fun WorkerItemCard(
                     }
 
                     if (!isAbsent && otHours > 0) {
+                        val otTotal = (otHours * otRate).toLong()
                         Text(
-                            text = "اضافه کار: ${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت (${Formatters.formatCurrency(otRate)})",
+                            text = "اضافه کار: ${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otTotal)}",
                             fontSize = 10.5.sp,
                             color = AmberAccent
                         )
@@ -1431,22 +1397,33 @@ private fun WorkerItemCard(
             }
 
             // گزینه های ایاب و ذهاب و غیره زیر مبلغ پرداختی نهایی
-            // اگر افزایشی بود با رنگ سبز و اگر کاهشی بود با رنگ قرمز
-            if (!isAbsent) {
-                val financialItems = buildList {
-                    if (worker.transitAllowance > 0) {
-                        add(Triple("ایاب و ذهاب", worker.transitAllowance, worker.transitImpact == "ALLOWANCE"))
-                    }
-                    if (worker.accommodationAllowance > 0) {
-                        add(Triple("حق مسکن", worker.accommodationAllowance, worker.accommodationImpact == "ALLOWANCE"))
-                    }
-                    if (worker.foodAllowance > 0) {
-                        add(Triple("خوراک", worker.foodAllowance, worker.foodImpact == "ALLOWANCE"))
-                    }
-                    if (worker.medicalAllowance > 0) {
-                        add(Triple("درمان", worker.medicalAllowance, worker.medicalImpact == "ALLOWANCE"))
+            // قانون غیبت: افزایش ایاب و ذهاب و غیره شامل غایب نمی‌شود، اما فقط کسورات شامل می‌شود
+            val financialItems = buildList {
+                if (worker.transitAllowance > 0) {
+                    val isAllowance = worker.transitImpact == "ALLOWANCE"
+                    if (!isAbsent || !isAllowance) {
+                        add(Triple("ایاب و ذهاب", worker.transitAllowance, isAllowance))
                     }
                 }
+                if (worker.accommodationAllowance > 0) {
+                    val isAllowance = worker.accommodationImpact == "ALLOWANCE"
+                    if (!isAbsent || !isAllowance) {
+                        add(Triple("حق مسکن", worker.accommodationAllowance, isAllowance))
+                    }
+                }
+                if (worker.foodAllowance > 0) {
+                    val isAllowance = worker.foodImpact == "ALLOWANCE"
+                    if (!isAbsent || !isAllowance) {
+                        add(Triple("خوراک", worker.foodAllowance, isAllowance))
+                    }
+                }
+                if (worker.medicalAllowance > 0) {
+                    val isAllowance = worker.medicalImpact == "ALLOWANCE"
+                    if (!isAbsent || !isAllowance) {
+                        add(Triple("درمان", worker.medicalAllowance, isAllowance))
+                    }
+                }
+            }
 
                 if (financialItems.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(4.dp))
@@ -1485,7 +1462,6 @@ private fun WorkerItemCard(
                         }
                     }
                 }
-            }
 
             if (worker.notes.isNotBlank()) {
                 Spacer(modifier = Modifier.height(3.dp))

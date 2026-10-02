@@ -219,7 +219,7 @@ fun WorkerDetailDialog(
                         if (isAbsent) {
                             CompactDetailRow(
                                 label = if (isHourly) "دستمزد ساعتی این روز:" else "دستمزد روزانه این روز:",
-                                value = "غیبت (مبلغ ثبت نشد)",
+                                value = "غایب (دستمزد و اضافه کار تعلق نمی‌گیرد)",
                                 valueColor = RoseAccent
                             )
                         } else if (isHourly) {
@@ -231,15 +231,15 @@ fun WorkerDetailDialog(
                             val totalHPay = (hHours * hRate).toLong()
                             CompactDetailRow(
                                 label = "دستمزد ساعتی:",
-                                value = if (totalHPay > 0) {
-                                    "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (${Formatters.formatCurrency(totalHPay)})"
+                                value = if (hHours > 0) {
+                                    "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(totalHPay)}"
                                 } else {
-                                    "ساعتی ${Formatters.formatCurrency(hRate)}"
+                                    "(هر ساعت ${Formatters.formatCurrency(hRate)}) = ۰ تومان"
                                 },
                                 valueColor = CyanAccent
                             )
                         } else if (isHalfDay) {
-                            val halfWage = if (attendance?.dailyWage != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage / 2
+                            val halfWage = if (attendance?.dailyWage != null && attendance.dailyWage > 0) attendance.dailyWage else WageCalculator.roundToLong(worker.baseDailyWage / 2.0)
                             CompactDetailRow(
                                 label = "دستمزد روزانه (نصف روز):",
                                 value = Formatters.formatCurrency(halfWage),
@@ -250,11 +250,17 @@ fun WorkerDetailDialog(
                             CompactDetailRow("دستمزد روزانه:", Formatters.formatCurrency(wageToDisplay))
                         }
 
-                        if (worker.isOvertimeEnabled || worker.overtimeHours > 0 || worker.overtimeRate > 0) {
-                            CompactDetailRow(
-                                "اضافه کاری:",
-                                "${Formatters.toPersianDigits(worker.overtimeHours.toString().removeSuffix(".0"))} ساعت × ${Formatters.formatCurrency(worker.overtimeRate)}"
-                            )
+                        if (!isAbsent) {
+                            val otHours = if (attendance != null && attendance.overtimeHours > 0) attendance.overtimeHours else worker.overtimeHours
+                            val otRate = if (attendance != null && attendance.overtimeRate > 0) attendance.overtimeRate else worker.overtimeRate
+                            val otPay = (otHours * otRate).toLong()
+                            if (otHours > 0) {
+                                CompactDetailRow(
+                                    "اضافه کاری:",
+                                    "${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otPay)}",
+                                    valueColor = AmberAccent
+                                )
+                            }
                         }
 
                         if (performance != null) {

@@ -558,12 +558,16 @@ fun DashboardScreen(
                             if (!isAbsent) {
                                 if (isHourly) {
                                     val hHours = dayCalc?.hourlyHours ?: att.hourlyHours
-                                    Text(
-                                        text = if (hHours > 0) "ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت" else "ساعتی",
-                                        fontSize = 10.5.sp,
-                                        color = CyanAccent,
-                                        fontWeight = FontWeight.Medium
-                                    )
+                                    val hRate = if (att.hourlyWageRate > 0) att.hourlyWageRate else (if (att.hourlyWage > 0) att.hourlyWage else (worker?.hourlyWageRate ?: worker?.baseHourlyWage ?: 0L))
+                                    val hPay = (hHours * hRate).toLong()
+                                    if (hHours > 0) {
+                                        Text(
+                                            text = "ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(hPay)}",
+                                            fontSize = 10.sp,
+                                            color = CyanAccent,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 } else if (isHalf) {
                                     Text(
                                         text = "نصف روز",
@@ -574,9 +578,12 @@ fun DashboardScreen(
                                 }
 
                                 if (att.overtimeHours > 0) {
+                                    val otRate = if (att.overtimeRate > 0) att.overtimeRate else (worker?.overtimeRate ?: 0L)
+                                    val otPay = (att.overtimeHours * otRate).toLong()
                                     Text(
-                                        text = "+${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))}h اضافه کار",
-                                        fontSize = 10.5.sp,
+                                        text = if (otRate > 0) "اضافه کار: ${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otPay)}"
+                                               else "اضافه کار: ${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))} ساعت",
+                                        fontSize = 10.sp,
                                         color = AmberAccent
                                     )
                                 }
