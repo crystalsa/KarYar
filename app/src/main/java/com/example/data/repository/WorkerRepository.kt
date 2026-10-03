@@ -199,10 +199,8 @@ class WorkerRepository(
     }
 
     /**
-     * Loads rich, accurate sample data with at least 5 workers per workplace folder,
-     * including realistic 11-digit phone numbers, 10-digit national IDs, hourly rates,
-     * overtime rates and hours, attendance records, and expenses.
-     * Does NOT clear existing data automatically.
+     * Loads sample data for ONLY Borj Sepehr project, with exactly 2 full working days
+     * and exactly 5 workers with realistic allowances and deductions across both days.
      */
     suspend fun loadSampleData() {
         val todayJalali = JalaliCalendar.todayString()
@@ -210,7 +208,7 @@ class WorkerRepository(
         val twoDaysAgoJalali = JalaliCalendar.fromTimestamp(System.currentTimeMillis() - 172800000L).format()
 
         // ==========================================
-        // WORKPLACE 1: پروژه برج سپهر
+        // ONLY WORKPLACE: پروژه برج سپهر
         // ==========================================
         val folder1Id = folderDao.insertFolder(
             WorkplaceFolderEntity(
@@ -223,17 +221,8 @@ class WorkerRepository(
             )
         )
 
-        // Date Folders for Workplace 1
-        val df1Saturday = dateFolderDao.insertDateFolder(
-            DateFolderEntity(
-                folderId = folder1Id,
-                date = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
-                title = "روز کاری جاری",
-                notes = "بتن‌ریزی سقف طبقه پنجم"
-            )
-        )
-        val df1Sunday = dateFolderDao.insertDateFolder(
+        // 2 Working Days (دو روز کاری در پروژه برج سپهر)
+        val df1Yesterday = dateFolderDao.insertDateFolder(
             DateFolderEntity(
                 folderId = folder1Id,
                 date = yesterdayJalali,
@@ -243,7 +232,17 @@ class WorkerRepository(
             )
         )
 
-        // 5 Workers for Workplace 1
+        val df1Today = dateFolderDao.insertDateFolder(
+            DateFolderEntity(
+                folderId = folder1Id,
+                date = todayJalali,
+                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
+                title = "روز کاری جاری",
+                notes = "بتن‌ریزی سقف طبقه پنجم"
+            )
+        )
+
+        // 5 Workers for پروژه برج سپهر با کمک‌هزینه‌ها و کسورات متنوع
         val w1Id = workerDao.insertWorker(
             WorkerEntity(
                 folderId = folder1Id,
@@ -263,7 +262,9 @@ class WorkerRepository(
                 notes = "با سابقه و مسلط به دیوارچینی و نماکاری",
                 colorTag = 0xFFD97706L,
                 transitAllowance = 50000L,
-                transitImpact = "ALLOWANCE"
+                transitImpact = "ALLOWANCE",
+                medicalAllowance = 30000L,
+                medicalImpact = "ALLOWANCE"
             )
         )
 
@@ -285,8 +286,10 @@ class WorkerRepository(
                 isActive = true,
                 notes = "دقیق در نقشه‌خوانی فونداسیون",
                 colorTag = 0xFF0284C7L,
-                accommodationAllowance = 100000L,
-                accommodationImpact = "DEDUCTION"
+                accommodationAllowance = 80000L,
+                accommodationImpact = "DEDUCTION",
+                transitAllowance = 30000L,
+                transitImpact = "DEDUCTION"
             )
         )
 
@@ -307,7 +310,11 @@ class WorkerRepository(
                 overtimeHours = 3.0,
                 isActive = true,
                 notes = "منظم در جابجایی مصالح و نظافت کارگاه",
-                colorTag = 0xFF059669L
+                colorTag = 0xFF059669L,
+                foodAllowance = 60000L,
+                foodImpact = "ALLOWANCE",
+                transitAllowance = 40000L,
+                transitImpact = "ALLOWANCE"
             )
         )
 
@@ -329,8 +336,12 @@ class WorkerRepository(
                 isActive = true,
                 notes = "دارای گواهینامه جوشکاری نفوذی و استاندارد",
                 colorTag = 0xFFE11D48L,
-                foodAllowance = 60000L,
-                foodImpact = "ALLOWANCE"
+                accommodationAllowance = 90000L,
+                accommodationImpact = "DEDUCTION",
+                foodAllowance = 50000L,
+                foodImpact = "ALLOWANCE",
+                transitAllowance = 35000L,
+                transitImpact = "ALLOWANCE"
             )
         )
 
@@ -351,15 +362,137 @@ class WorkerRepository(
                 overtimeHours = 1.0,
                 isActive = true,
                 notes = "مسلط به لوله‌کشی پنج‌لایه و فاضلاب پوش‌فیت",
-                colorTag = 0xFF7C3AEDL
+                colorTag = 0xFF7C3AEDL,
+                transitAllowance = 60000L,
+                transitImpact = "ALLOWANCE",
+                accommodationAllowance = 100000L,
+                accommodationImpact = "DEDUCTION",
+                medicalAllowance = 25000L,
+                medicalImpact = "DEDUCTION"
             )
         )
 
-        // Attendance records for Workplace 1 (Today)
+        // ==========================================
+        // ATTENDANCE RECORDS FOR DAY 1: روز کاری قبل (yesterdayJalali) - ۵ نفر
+        // ==========================================
         attendanceDao.insertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w1Id,
+                dateFolderId = df1Yesterday,
+                date = yesterdayJalali,
+                entryTime = "07:30",
+                exitTime = "18:00",
+                regularHours = 8.0,
+                hourlyHours = 0.0,
+                hourlyWageRate = 0L,
+                overtimeHours = 2.0,
+                overtimeRate = 180000L,
+                dailyWage = 1200000L,
+                hourlyWage = 0L,
+                workplaceName = "پروژه برج سپهر",
+                employerName = "مهندس سعیدی",
+                foremanName = "حاج اصغر کریمی",
+                notes = "تمام روز"
+            )
+        )
+
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = folder1Id,
+                workerId = w2Id,
+                dateFolderId = df1Yesterday,
+                date = yesterdayJalali,
+                entryTime = "08:00",
+                exitTime = "17:30",
+                regularHours = 0.0,
+                hourlyHours = 6.0,
+                hourlyWageRate = 140000L,
+                overtimeHours = 1.5,
+                overtimeRate = 160000L,
+                dailyWage = 0L,
+                hourlyWage = 140000L,
+                workplaceName = "پروژه برج سپهر",
+                employerName = "مهندس سعیدی",
+                foremanName = "حاج اصغر کریمی",
+                notes = "ساعتی"
+            )
+        )
+
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = folder1Id,
+                workerId = w3Id,
+                dateFolderId = df1Yesterday,
+                date = yesterdayJalali,
+                entryTime = "07:45",
+                exitTime = "18:30",
+                regularHours = 8.0,
+                hourlyHours = 0.0,
+                hourlyWageRate = 0L,
+                overtimeHours = 2.0,
+                overtimeRate = 120000L,
+                dailyWage = 800000L,
+                hourlyWage = 0L,
+                workplaceName = "پروژه برج سپهر",
+                employerName = "مهندس سعیدی",
+                foremanName = "حاج اصغر کریمی",
+                notes = "تمام روز"
+            )
+        )
+
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = folder1Id,
+                workerId = w4Id,
+                dateFolderId = df1Yesterday,
+                date = yesterdayJalali,
+                entryTime = "08:00",
+                exitTime = "18:00",
+                regularHours = 0.0,
+                hourlyHours = 6.0,
+                hourlyWageRate = 170000L,
+                overtimeHours = 2.0,
+                overtimeRate = 200000L,
+                dailyWage = 0L,
+                hourlyWage = 170000L,
+                workplaceName = "پروژه برج سپهر",
+                employerName = "مهندس سعیدی",
+                foremanName = "حاج اصغر کریمی",
+                notes = "ساعتی"
+            )
+        )
+
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = folder1Id,
+                workerId = w5Id,
+                dateFolderId = df1Yesterday,
+                date = yesterdayJalali,
+                entryTime = "08:30",
+                exitTime = "17:30",
+                regularHours = 8.0,
+                hourlyHours = 0.0,
+                hourlyWageRate = 0L,
+                overtimeHours = 1.0,
+                overtimeRate = 190000L,
+                dailyWage = 1250000L,
+                hourlyWage = 0L,
+                workplaceName = "پروژه برج سپهر",
+                employerName = "مهندس سعیدی",
+                foremanName = "حاج اصغر کریمی",
+                notes = "تمام روز"
+            )
+        )
+
+        // ==========================================
+        // ATTENDANCE RECORDS FOR DAY 2: روز کاری جاری (todayJalali) - ۵ نفر
+        // ==========================================
+        attendanceDao.insertAttendance(
+            AttendanceEntity(
+                folderId = folder1Id,
+                workerId = w1Id,
+                dateFolderId = df1Today,
                 date = todayJalali,
                 entryTime = "07:30",
                 exitTime = "18:00",
@@ -381,6 +514,7 @@ class WorkerRepository(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w2Id,
+                dateFolderId = df1Today,
                 date = todayJalali,
                 entryTime = "08:00",
                 exitTime = "17:30",
@@ -402,6 +536,7 @@ class WorkerRepository(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w3Id,
+                dateFolderId = df1Today,
                 date = todayJalali,
                 entryTime = "07:45",
                 exitTime = "19:00",
@@ -423,6 +558,7 @@ class WorkerRepository(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w4Id,
+                dateFolderId = df1Today,
                 date = todayJalali,
                 entryTime = "08:00",
                 exitTime = "18:00",
@@ -444,6 +580,7 @@ class WorkerRepository(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w5Id,
+                dateFolderId = df1Today,
                 date = todayJalali,
                 entryTime = "08:30",
                 exitTime = "17:30",
@@ -460,242 +597,31 @@ class WorkerRepository(
                 notes = "تمام روز"
             )
         )
+    }
 
-        // ==========================================
-        // WORKPLACE 2: کارگاه بیمارستان میلاد
-        // ==========================================
-        val folder2Id = folderDao.insertFolder(
-            WorkplaceFolderEntity(
-                name = "کارگاه بیمارستان میلاد",
-                foremanName = "مهندس صادقی",
-                employerName = "شرکت توسعه درمان",
-                colorTag = 0xFF0284C7L,
-                createdAt = yesterdayJalali,
-                notes = "بازسازی بخش جراحی، تأسیسات الکتریکی و هوارسان‌ها"
-            )
-        )
-
-        // Date Folders for Workplace 2
-        val df2Saturday = dateFolderDao.insertDateFolder(
-            DateFolderEntity(
-                folderId = folder2Id,
-                date = todayJalali,
-                dayOfWeek = JalaliCalendar.getDayOfWeek(todayJalali),
-                title = "روز کاری",
-                notes = "کابل‌کشی تابلوهای برق اضطراری"
-            )
-        )
-
-        // 5 Workers for Workplace 2
-        val w6Id = workerDao.insertWorker(
-            WorkerEntity(
-                folderId = folder2Id,
-                name = "مهدی کاظمی",
-                role = "تکنسین برق صنعتی",
-                phone = "09129998877",
-                nationalId = "0077889900",
-                baseDailyWage = 0L,
-                baseHourlyWage = 180000L,
-                isHourlyEnabled = true,
-                hourlyWageRate = 180000L,
-                hourlyHours = 6.0,
-                isOvertimeEnabled = true,
-                overtimeRate = 210000L,
-                overtimeHours = 2.0,
-                isActive = true,
-                notes = "مسلط به تابلو برق و ژنراتور اضطراری",
-                colorTag = 0xFF0284C7L
-            )
-        )
-
-        val w7Id = workerDao.insertWorker(
-            WorkerEntity(
-                folderId = folder2Id,
-                name = "بهزاد رستمی",
-                role = "گچ‌کار و ابزارزن",
-                phone = "09361114477",
-                nationalId = "0066554433",
-                baseDailyWage = 1150000L,
-                baseHourlyWage = 0L,
-                isHourlyEnabled = false,
-                hourlyWageRate = 0L,
-                hourlyHours = 0.0,
-                isOvertimeEnabled = true,
-                overtimeRate = 150000L,
-                overtimeHours = 2.5,
-                isActive = true,
-                notes = "سفیدکاری و لکه‌گیری سقف کاذب",
-                colorTag = 0xFFD97706L
-            )
-        )
-
-        val w8Id = workerDao.insertWorker(
-            WorkerEntity(
-                folderId = folder2Id,
-                name = "فرزاد اکبری",
-                role = "نقاش ساختمان",
-                phone = "09192226688",
-                nationalId = "0044332211",
-                baseDailyWage = 0L,
-                baseHourlyWage = 130000L,
-                isHourlyEnabled = true,
-                hourlyWageRate = 130000L,
-                hourlyHours = 5.0,
-                isOvertimeEnabled = false,
-                overtimeRate = 0L,
-                overtimeHours = 0.0,
-                isActive = true,
-                notes = "رنگ‌آمیزی اپوکسی بهداشتی دیوارها",
-                colorTag = 0xFF059669L
-            )
-        )
-
-        val w9Id = workerDao.insertWorker(
-            WorkerEntity(
-                folderId = folder2Id,
-                name = "میلاد عباسی",
-                role = "کاشی‌کار و سرامیک‌کار",
-                phone = "09128883344",
-                nationalId = "0033221199",
-                baseDailyWage = 1300000L,
-                baseHourlyWage = 0L,
-                isHourlyEnabled = false,
-                hourlyWageRate = 0L,
-                hourlyHours = 0.0,
-                isOvertimeEnabled = true,
-                overtimeRate = 175000L,
-                overtimeHours = 2.0,
-                isActive = true,
-                notes = "نصب سرامیک اسلب بخش مراقبت‌های ویژه",
-                colorTag = 0xFFE11D48L
-            )
-        )
-
-        val w10Id = workerDao.insertWorker(
-            WorkerEntity(
-                folderId = folder2Id,
-                name = "امید حسینی",
-                role = "نصاب درب ضدحریق و پنجره",
-                phone = "09375551122",
-                nationalId = "0022118877",
-                baseDailyWage = 0L,
-                baseHourlyWage = 120000L,
-                isHourlyEnabled = true,
-                hourlyWageRate = 120000L,
-                hourlyHours = 4.0,
-                isOvertimeEnabled = false,
-                overtimeRate = 0L,
-                overtimeHours = 0.0,
-                isActive = true,
-                notes = "رگلاژ درب‌های بیمارستانی و قفل‌ها",
-                colorTag = 0xFF7C3AEDL
-            )
-        )
-
-        // Attendance records for Workplace 2 (Today)
-        attendanceDao.insertAttendance(
-            AttendanceEntity(
-                folderId = folder2Id,
-                workerId = w6Id,
-                date = todayJalali,
-                entryTime = "08:00",
-                exitTime = "18:00",
-                regularHours = 0.0,
-                hourlyHours = 6.0,
-                hourlyWageRate = 180000L,
-                overtimeHours = 2.0,
-                overtimeRate = 210000L,
-                dailyWage = 0L,
-                hourlyWage = 180000L,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "ساعتی"
-            )
-        )
-
-        attendanceDao.insertAttendance(
-            AttendanceEntity(
-                folderId = folder2Id,
-                workerId = w7Id,
-                date = todayJalali,
-                entryTime = "08:00",
-                exitTime = "17:30",
-                regularHours = 8.0,
-                hourlyHours = 0.0,
-                hourlyWageRate = 0L,
-                overtimeHours = 2.5,
-                overtimeRate = 150000L,
-                dailyWage = 1150000L,
-                hourlyWage = 0L,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "تمام روز"
-            )
-        )
-
-        attendanceDao.insertAttendance(
-            AttendanceEntity(
-                folderId = folder2Id,
-                workerId = w8Id,
-                date = todayJalali,
-                entryTime = "08:15",
-                exitTime = "17:00",
-                regularHours = 0.0,
-                hourlyHours = 5.0,
-                hourlyWageRate = 130000L,
-                overtimeHours = 0.0,
-                overtimeRate = 0L,
-                dailyWage = 0L,
-                hourlyWage = 130000L,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "ساعتی"
-            )
-        )
-
-        attendanceDao.insertAttendance(
-            AttendanceEntity(
-                folderId = folder2Id,
-                workerId = w9Id,
-                date = todayJalali,
-                entryTime = "08:00",
-                exitTime = "13:00",
-                regularHours = 4.0,
-                hourlyHours = 0.0,
-                hourlyWageRate = 0L,
-                overtimeHours = 0.0,
-                overtimeRate = 0L,
-                dailyWage = 650000L,
-                hourlyWage = 0L,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "نصف روز"
-            )
-        )
-
-        attendanceDao.insertAttendance(
-            AttendanceEntity(
-                folderId = folder2Id,
-                workerId = w10Id,
-                date = todayJalali,
-                entryTime = "08:30",
-                exitTime = "16:30",
-                regularHours = 0.0,
-                hourlyHours = 4.0,
-                hourlyWageRate = 120000L,
-                overtimeHours = 0.0,
-                overtimeRate = 0L,
-                dailyWage = 0L,
-                hourlyWage = 120000L,
-                workplaceName = "کارگاه بیمارستان میلاد",
-                employerName = "شرکت توسعه درمان",
-                foremanName = "مهندس صادقی",
-                notes = "ساعتی"
-            )
-        )
+    /**
+     * Ensures only "پروژه برج سپهر" remains, deleting any other projects,
+     * and ensuring it has exactly 5 workers and 2 working days of records.
+     */
+    suspend fun ensureOnlySepehrProject() {
+        val allFolders = folderDao.getAllFoldersSync()
+        for (f in allFolders) {
+            if (!f.name.contains("سپهر")) {
+                folderDao.deleteFolder(f)
+            }
+        }
+        val sepehrFolders = folderDao.getAllFoldersSync().filter { it.name.contains("سپهر") }
+        if (sepehrFolders.isEmpty()) {
+            loadSampleData()
+        } else {
+            val sepehr = sepehrFolders.first()
+            val workers = workerDao.getWorkersByFolderSync(sepehr.id)
+            val dateFolders = dateFolderDao.getDateFoldersByFolderSync(sepehr.id)
+            val atts = attendanceDao.getAttendanceByFolderSync(sepehr.id)
+            if (workers.size != 5 || dateFolders.size != 2 || atts.size != 10) {
+                clearAllData()
+                loadSampleData()
+            }
+        }
     }
 }

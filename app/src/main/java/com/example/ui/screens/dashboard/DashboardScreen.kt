@@ -1,5 +1,10 @@
 package com.example.ui.screens.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -27,34 +32,42 @@ import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DirectionsBus
-import androidx.compose.material.icons.filled.Engineering
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocalDining
 import androidx.compose.material.icons.filled.MedicalServices
+import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.local.entity.DateFolderEntity
+import com.example.domain.model.WorkerPerformance
 import com.example.ui.WorkerViewModel
 import com.example.ui.components.GlowStatCard
 import com.example.ui.components.HairlineCard
@@ -72,6 +85,7 @@ import com.example.ui.theme.Slate200
 import com.example.util.Formatters
 import com.example.util.JalaliCalendar
 import com.example.util.WageCalculator
+import java.util.Locale
 
 @Composable
 fun DashboardScreen(
@@ -83,13 +97,12 @@ fun DashboardScreen(
     val folder by viewModel.currentFolder.collectAsState()
     val analytics by viewModel.analytics.collectAsState()
     val workers by viewModel.workers.collectAsState()
-    val recentAttendance by viewModel.attendanceList.collectAsState()
-    val dailyBookkeeping by viewModel.dailyBookkeeping.collectAsState()
-    val selectedDailyDate by viewModel.selectedDailyDate.collectAsState()
+    val workerPerformances by viewModel.workerPerformances.collectAsState()
     val dateFolders by viewModel.dateFolders.collectAsState()
+    val attendanceList by viewModel.attendanceList.collectAsState()
 
     // 1. When app starts fresh without any folder selected:
-    // User requested: "صفحه اول کار وقتی شروع میشه باید خالی باشه"
+    // "صفحه اول کار وقتی شروع میشه باید خالی باشه"
     if (folder == null) {
         Box(
             modifier = modifier
@@ -144,255 +157,193 @@ fun DashboardScreen(
         return
     }
 
+    // Dynamic project-wide aggregated sums directly from calculated performances
+    val totalProjectBaseWages = remember(workerPerformances) { workerPerformances.sumOf { it.baseWageTotal } }
+    val totalProjectHourlyPay = remember(workerPerformances) { workerPerformances.sumOf { it.hourlyPayTotal } }
+    val totalProjectOvertimePay = remember(workerPerformances) { workerPerformances.sumOf { it.overtimePayTotal } }
+    val totalProjectOvertimeHours = remember(workerPerformances) { workerPerformances.sumOf { it.overtimeHours } }
+    val totalProjectHours = remember(workerPerformances) { workerPerformances.sumOf { it.regularHours + it.hourlyHours + it.overtimeHours } }
+    val totalProjectAllowances = remember(workerPerformances) { workerPerformances.sumOf { it.totalAllowances } }
+    val totalProjectDeductions = remember(workerPerformances) { workerPerformances.sumOf { it.totalDeductions } }
+    val totalProjectNetPayout = remember(workerPerformances, analytics) {
+        val fromPerf = workerPerformances.sumOf { it.netPayout }
+        if (fromPerf > 0L) fromPerf else analytics.grandTotalProjectCost
+    }
+
+    // مجموع تمام نفرات کارکرده در تمامی روزهای پروژه (نفر-روز)
+    // مثلاً روز اول ۵ نفر + روز دوم ۵ نفر = ۱۰ نفر کل پرسنل تا امروز
+    val totalPersonDays = remember(workerPerformances, attendanceList, analytics) {
+        val fromPerf = workerPerformances.sumOf { it.totalShifts }
+        if (fromPerf > 0) fromPerf
+        else if (analytics.totalPersonDays > 0) analytics.totalPersonDays
+        else attendanceList.count { it.regularHours > 0 || it.hourlyHours > 0 || it.dailyWage > 0 || it.hourlyWage > 0 }
+    }
+
+    // خلاصه شمارش نفرات هر روز جهت نمایش در زیرنویس کارت
+    val dailyAttendanceSummary = remember(dateFolders, attendanceList) {
+        val counts = dateFolders.map { df ->
+            attendanceList.count { it.date == df.date && (it.regularHours > 0 || it.hourlyHours > 0 || it.dailyWage > 0 || it.hourlyWage > 0) }
+        }.filter { it > 0 }
+        if (counts.size >= 2) {
+            "مجموع روزها: " + counts.joinToString(" + ") { Formatters.toPersianDigits(it) } + " نفر"
+        } else {
+            "مجموع حضور پرسنل در تمام روزها"
+        }
+    }
+
+    var isProjectBreakdownExpanded by rememberSaveable { mutableStateOf(false) }
+
     // 2. Normal Dashboard when a workplace folder is selected
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(top = 10.dp, bottom = 100.dp)
     ) {
-        // 1. DAILY BOOKKEEPING SECTION (حساب کتاب در صفحه اصلی به صورت روزانه باشه و اعداد رو نشون بده)
+        // بخش ۱: کل اطلاعات مالی پروژه تا امروز
         item {
             HairlineCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = MaterialTheme.colorScheme.surface,
                 shape = RoundedCornerShape(16.dp)
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    // Header with Date Selector
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconicsBox(
-                                icon = Icons.Default.CalendarToday,
-                                color = AmberAccent,
-                                size = IconicsSize.TINY
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "حساب و کتاب روزانه",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 13.5.sp,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = "${dailyBookkeeping.dayOfWeek} ${Formatters.toPersianDigits(dailyBookkeeping.date)}",
-                            fontSize = 11.5.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = AmberAccent
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Date navigation chips - synchronized with dateFolders
-                    val todayStr = JalaliCalendar.todayString()
-                    val sortedDateFolders = remember(dateFolders) {
-                        dateFolders.sortedWith(compareBy({ it.date }, { it.id }))
-                    }
-
-                    Row(
+                Column(modifier = Modifier.padding(14.dp)) {
+                    // Big Grand Total Cost Card
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { isProjectBreakdownExpanded = !isProjectBreakdownExpanded },
+                        shape = RoundedCornerShape(12.dp),
+                        color = EmeraldAccent.copy(alpha = 0.10f)
                     ) {
-                        // All Date Folders (روزهای کاری تعریف‌شده در پروژه)
-                        sortedDateFolders.forEach { df ->
-                            val isSelected = (selectedDailyDate == df.date)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) AmberAccent else Slate100,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        viewModel.selectDailyDate(df.date)
-                                        viewModel.selectDateFolder(df)
-                                    }
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "کل پرداختی‌های پروژه تا امروز:",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = "مجموع خالص کل دستمزدها، اضافه کار و مزایا",
+                                        fontSize = 10.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
-                                        text = df.dayOfWeek,
-                                        fontSize = 11.sp,
-                                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                        text = Formatters.formatCurrency(totalProjectNetPayout),
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.ExtraBold,
+                                        color = EmeraldAccent
                                     )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = Formatters.toPersianDigits(df.date),
-                                        fontSize = 10.5.sp,
-                                        color = if (isSelected) Color.White.copy(alpha = 0.95f) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = EmeraldAccent.copy(alpha = 0.2f),
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (isProjectBreakdownExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                contentDescription = "ریز ارقام کل پروژه",
+                                                tint = EmeraldAccent,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ریز ارقام مالی تمام پروژه با فلش
+                            AnimatedVisibility(
+                                visible = isProjectBreakdownExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 10.dp)
+                                ) {
+                                    HorizontalDivider(
+                                        thickness = 0.6.dp,
+                                        color = EmeraldAccent.copy(alpha = 0.25f)
                                     )
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    ProjectDetailRow(
+                                        title = "مجموع دستمزد پایه روزانه کل پروژه:",
+                                        amount = totalProjectBaseWages,
+                                        color = EmeraldAccent
+                                    )
+                                    if (totalProjectHourlyPay > 0L) {
+                                        ProjectDetailRow(
+                                            title = "مجموع دستمزد کارکرد ساعتی کل پروژه:",
+                                            amount = totalProjectHourlyPay,
+                                            color = CyanAccent
+                                        )
+                                    }
+                                    if (totalProjectOvertimePay > 0L) {
+                                        ProjectDetailRow(
+                                            title = "مجموع دستمزد اضافه کاری کل پروژه:",
+                                            amount = totalProjectOvertimePay,
+                                            color = AmberAccent
+                                        )
+                                    }
+                                    if (totalProjectAllowances > 0L) {
+                                        ProjectDetailRow(
+                                            title = "مجموع کمک‌هزینه‌ها و ایاب و ذهاب افزایشی:",
+                                            amount = totalProjectAllowances,
+                                            color = IndigoAccent
+                                        )
+                                    }
+                                    if (totalProjectDeductions > 0L) {
+                                        ProjectDetailRow(
+                                            title = "مجموع کسورات کاهشی (ایاب و ذهاب، مسکن، غذا):",
+                                            amount = totalProjectDeductions,
+                                            color = RoseAccent,
+                                            isNegative = true
+                                        )
+                                    }
                                 }
                             }
                         }
-
-                        // If today is not in sortedDateFolders, show today chip
-                        if (sortedDateFolders.none { it.date == todayStr }) {
-                            val isSelected = (selectedDailyDate == todayStr)
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = if (isSelected) AmberAccent else Slate100,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { viewModel.selectDailyDate(todayStr) }
-                            ) {
-                                Text(
-                                    text = "امروز (${Formatters.toPersianDigits(todayStr)})",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
-                                    fontSize = 11.sp,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                            }
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(10.dp))
 
-                    // Big Daily Total Card
-                    HairlineCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = AmberAccent.copy(alpha = 0.08f),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(12.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "مجموع دستمزد این روز:",
-                                    fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Text(
-                                    text = "دستمزد پایه + کارکرد ساعتی + اضافه کاری",
-                                    fontSize = 10.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = Formatters.formatCurrency(dailyBookkeeping.grandDailyCost),
-                                fontSize = 15.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = AmberAccent,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Daily Breakdown Grid
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        DailyMetricCard(
-                            title = "دستمزد کارگران امروز",
-                            value = Formatters.formatCurrency(dailyBookkeeping.totalDailyWages + dailyBookkeeping.totalHourlyPay + dailyBookkeeping.totalOvertimePay),
-                            subtitle = "${Formatters.toPersianDigits(dailyBookkeeping.workersPresent)} کارگر حاضر در کارگاه",
-                            accentColor = EmeraldAccent,
-                            modifier = Modifier.weight(1f)
-                        )
-                        DailyMetricCard(
-                            title = "ساعات کارکرد امروز",
-                            value = "${Formatters.toPersianDigits(dailyBookkeeping.totalHours)} ساعت",
-                            subtitle = "مجموع ساعات عادی و اضافه کاری",
-                            accentColor = CyanAccent,
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Detailed breakdown numbers for the day
-                    Text(
-                        text = "ریز ارقام و مبالغ امروز:",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    DailyDetailItem(
-                        title = "دستمزد روزانه عادی",
-                        amount = dailyBookkeeping.totalDailyWages,
-                        color = EmeraldAccent
-                    )
-                    if (dailyBookkeeping.totalHourlyPay > 0) {
-                        DailyDetailItem(
-                            title = "دستمزد کارکرد ساعتی",
-                            amount = dailyBookkeeping.totalHourlyPay,
-                            color = CyanAccent
-                        )
-                    }
-                    if (dailyBookkeeping.totalOvertimePay > 0) {
-                        DailyDetailItem(
-                            title = "دستمزد اضافه کاری",
-                            amount = dailyBookkeeping.totalOvertimePay,
-                            color = AmberAccent
-                        )
-                    }
-                }
-            }
-        }
-
-        // 3. Overall Project Totals (مجموع کل پروژه)
-        item {
-            HairlineCard(
-                modifier = Modifier.fillMaxWidth(),
-                backgroundColor = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "مجموع مالی و کارکرد کل کارگاه تاکنون",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.5.sp,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
+                    // 4-Card Overview Grid
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         GlowStatCard(
-                            title = "کل پرداختی کارگاه",
-                            value = Formatters.formatCurrency(analytics.grandTotalProjectCost),
-                            subtitle = "مجموع کل دستمزدها و مطالبات",
-                            icon = Icons.Default.AttachMoney,
+                            title = "کل روزهای کاری",
+                            value = "${Formatters.toPersianDigits(dateFolders.size)} روز کاری",
+                            subtitle = "روزهای ثبت‌شده در پروژه",
+                            icon = Icons.Default.CalendarMonth,
                             accentColor = EmeraldAccent,
                             modifier = Modifier.weight(1f)
                         )
                         GlowStatCard(
-                            title = "پرسنل پروژه",
-                            value = "${Formatters.toPersianDigits(analytics.totalWorkersCount)} نفر",
-                            subtitle = "${Formatters.toPersianDigits(analytics.activeWorkersCount)} نفر شاغل و فعال",
+                            title = "کل پرسنل تا امروز",
+                            value = "${Formatters.toPersianDigits(totalPersonDays)} نفر",
+                            subtitle = dailyAttendanceSummary,
                             icon = Icons.Default.People,
                             accentColor = CyanAccent,
                             modifier = Modifier.weight(1f)
@@ -405,19 +356,21 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        val hoursStr = if (totalProjectHours % 1.0 == 0.0) totalProjectHours.toLong().toString() else String.format(Locale.US, "%.1f", totalProjectHours)
                         GlowStatCard(
-                            title = "کل روزهای کاری",
-                            value = "${Formatters.toPersianDigits(dateFolders.size)} روز",
-                            subtitle = "روزهای ثبت‌شده در پروژه",
-                            icon = Icons.Default.CalendarMonth,
-                            accentColor = EmeraldAccent,
+                            title = "کل ساعات کارکرد",
+                            value = "${Formatters.toPersianDigits(hoursStr)} ساعت",
+                            subtitle = "مجموع ساعات عادی و اضافه کار",
+                            icon = Icons.Default.AccessTime,
+                            accentColor = AmberAccent,
                             modifier = Modifier.weight(1f)
                         )
+                        val otHoursStr = if (totalProjectOvertimeHours % 1.0 == 0.0) totalProjectOvertimeHours.toLong().toString() else String.format(Locale.US, "%.1f", totalProjectOvertimeHours)
                         GlowStatCard(
-                            title = "مجموع دستمزدها",
-                            value = Formatters.formatCurrency(analytics.totalWagesPaid + analytics.totalHourlyPaid + analytics.totalOvertimePaid),
-                            subtitle = "مجموع پرداختی تمام روزها",
-                            icon = Icons.Default.AttachMoney,
+                            title = "کل اضافه کاری",
+                            value = "${Formatters.toPersianDigits(otHoursStr)} ساعت",
+                            subtitle = "ارزش: ${Formatters.formatCurrency(totalProjectOvertimePay)}",
+                            icon = Icons.Default.TrendingUp,
                             accentColor = IndigoAccent,
                             modifier = Modifier.weight(1f)
                         )
@@ -426,30 +379,40 @@ fun DashboardScreen(
             }
         }
 
-        // 4. Recent Shifts in this Project
+        // بخش ۲: خلاصه کارکرد و دستمزد هر پرسنل در کل پروژه با فلش رو به پایین (پیش‌فرض مخفی)
+        // User request:
+        // "در زیر هم مثلا کلا روز هایی که سعید احمدی کار کرده ، کل دستمزدی که گرفته کل اضافه کاری یا کل دستمزد ساعتی که گرفته یا کل ایاب و ذهاب و غیره کاهشی افزایش رو بنویس و برای این که شلوغ نشه پیشفرض مخفی باشه و با یک فلش رو به پایین جزئیاتش دیده بشه"
         item {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "آخرین کارکردهای ثبت‌شده",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 13.5.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "${Formatters.toPersianDigits(recentAttendance.size)} رکورد",
-                    fontSize = 11.5.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Column {
+                    Text(
+                        text = "کارکرد و دریافتی پرسنل در کل پروژه",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.5.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "پیش‌فرض خلاصه؛ برای مشاهده جزئیات روی فلش هر شخص کلیک کنید",
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                StatusBadge(
+                    text = "${Formatters.toPersianDigits(workerPerformances.size)} پرسنل",
+                    dotColor = AmberAccent
                 )
             }
         }
 
-        val workerMap = workers.associateBy { it.id }
-        if (recentAttendance.isEmpty()) {
+        if (workerPerformances.isEmpty()) {
             item {
                 HairlineCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -462,7 +425,7 @@ fun DashboardScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "هنوز هیچ تردد یا کارکردی در این پروژه ثبت نشده است.",
+                            text = "هنوز کارگری در این پروژه ثبت نشده است.",
                             fontSize = 12.5.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -470,124 +433,366 @@ fun DashboardScreen(
                 }
             }
         } else {
-            items(recentAttendance.take(10)) { att ->
-                val worker = workerMap[att.workerId]
-                val dayCalc = if (worker != null) WageCalculator.calculateDay(worker, att) else null
-                val isAbsent = if (worker != null) WageCalculator.isAbsent(worker, att) else false
-                val isHourly = if (worker != null) WageCalculator.isHourly(worker, att) else (att.hourlyHours > 0 || att.hourlyWage > 0)
-                val isHalf = if (worker != null) WageCalculator.isHalfDay(worker, att) else false
-                val netPayout = dayCalc?.netPayout ?: (if (att.dailyWage > 0L) att.dailyWage else (att.hourlyHours * att.hourlyWage).toLong())
+            items(workerPerformances, key = { it.worker.id }) { perf ->
+                WorkerCumulativePerformanceCard(perf = perf)
+            }
+        }
+    }
+}
 
-                HairlineCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
+/**
+ * کارت کارکرد تجمیعی هر پرسنل در کل پروژه با قابلیت باز و بسته شدن جزئیات (فلش رو به پایین، پیش‌فرض مخفی)
+ */
+@Composable
+private fun WorkerCumulativePerformanceCard(
+    perf: WorkerPerformance,
+    modifier: Modifier = Modifier
+) {
+    val worker = perf.worker
+    // پیش‌فرض مخفی تا صفحه شلوغ نشه (کاربر با زدن فلش جزئیات رو می‌بینه)
+    var isExpanded by rememberSaveable(worker.id) { mutableStateOf(false) }
+
+    HairlineCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .testTag("dashboard_worker_${worker.id}")
+            .clickable { isExpanded = !isExpanded },
+        backgroundColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            // سطر خلاصه بالا: اطلاعات شخص، روزهای کاری، دریافتی کل و فلش بازشونده
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // آواتار و نام و شغل
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(Color(worker.colorTag)),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Text(
+                            text = worker.name.take(1),
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = worker.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(Color(worker?.colorTag ?: 0xFFD97706L).copy(alpha = 0.15f)),
-                                contentAlignment = Alignment.Center
+                            if (worker.role.isNotBlank()) {
+                                Text(
+                                    text = worker.role,
+                                    fontSize = 11.sp,
+                                    color = AmberAccent,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = "• ${Formatters.toPersianDigits(perf.totalShifts)} روز کارکرد",
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // ستون مبلغ کل پرداختی + دکمه فلش رو به پایین
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(
+                            text = "کل دریافتی:",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = Formatters.formatCurrency(perf.netPayout),
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = EmeraldAccent
+                        )
+                    }
+
+                    // دکمه فلش رو به پایین / بالا با استایل دایره‌ای زیبا
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isExpanded) EmeraldAccent.copy(alpha = 0.2f) else Slate100,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                contentDescription = if (isExpanded) "بستن جزئیات" else "مشاهده جزئیات کارکرد",
+                                tint = if (isExpanded) EmeraldAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // بخش جزئیات کامل: فقط هنگام باز شدن با فلش نمایش داده می‌شود
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
+                ) {
+                    HorizontalDivider(thickness = 0.6.dp, color = Slate200)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ریز دستمزدها، اضافه کار و ساعات به فرمت دقیق مشخص شده
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = Slate100,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            // ۱. کل روزهای کارکرد و ساعات عادی
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = (worker?.name?.take(1) ?: "ک"),
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(worker?.colorTag ?: 0xFFD97706L)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Column {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = worker?.name ?: "کارگر",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                    if (worker?.role?.isNotBlank() == true) {
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "(${worker.role})",
-                                            fontSize = 11.sp,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "${Formatters.toPersianDigits(att.date)} | ورود: ${Formatters.toPersianDigits(att.entryTime)} - خروج: ${Formatters.toPersianDigits(att.exitTime)}",
+                                    text = "کل روزهای کارکرد:",
                                     fontSize = 11.5.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "محل: ${att.workplaceName.ifBlank { "کارگاه" }} (سرکارگر: ${att.foremanName.ifBlank { "تعیین نشده" }})",
-                                    fontSize = 11.sp,
-                                    color = CyanAccent
-                                )
-                            }
-                        }
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            if (isAbsent) {
-                                Text(
-                                    text = "غایب (۰ تومان)",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = RoseAccent
-                                )
-                            } else {
-                                Text(
-                                    text = Formatters.formatCurrency(netPayout),
-                                    fontSize = 13.sp,
+                                    text = "${Formatters.toPersianDigits(perf.totalShifts)} روز کاری (${Formatters.toPersianDigits(perf.regularHours.toString().removeSuffix(".0"))} ساعت کار عادی)",
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = EmeraldAccent
                                 )
                             }
 
-                            if (!isAbsent) {
-                                if (isHourly) {
-                                    val hHours = dayCalc?.hourlyHours ?: att.hourlyHours
-                                    val hRate = if (att.hourlyWageRate > 0) att.hourlyWageRate else (if (att.hourlyWage > 0) att.hourlyWage else (worker?.hourlyWageRate ?: worker?.baseHourlyWage ?: 0L))
-                                    val hPay = (hHours * hRate).toLong()
-                                    if (hHours > 0) {
-                                        Text(
-                                            text = "ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(hPay)}",
-                                            fontSize = 10.sp,
-                                            color = CyanAccent,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                } else if (isHalf) {
+                            // ۲. کل دستمزد روزانه پایه گرفته شده
+                            if (perf.baseWageTotal > 0L) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
-                                        text = "نصف روز",
-                                        fontSize = 10.5.sp,
-                                        color = AmberAccent,
-                                        fontWeight = FontWeight.Medium
+                                        text = "کل دستمزد پایه روزانه:",
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
-                                }
-
-                                if (att.overtimeHours > 0) {
-                                    val otRate = if (att.overtimeRate > 0) att.overtimeRate else (worker?.overtimeRate ?: 0L)
-                                    val otPay = (att.overtimeHours * otRate).toLong()
                                     Text(
-                                        text = if (otRate > 0) "اضافه کار: ${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otPay)}"
-                                               else "اضافه کار: ${Formatters.toPersianDigits(att.overtimeHours.toString().removeSuffix(".0"))} ساعت",
-                                        fontSize = 10.sp,
-                                        color = AmberAccent
+                                        text = Formatters.formatCurrency(perf.baseWageTotal),
+                                        fontSize = 11.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
                                     )
                                 }
                             }
+
+                            // ۳. کل دستمزد ساعتی گرفته شده به فرمت درخواستی:
+                            // دستمزد ساعتی: ۲ ساعت ( هر ساعت 100000 تومان)= 200000 تومان
+                            val hHours = perf.hourlyHours
+                            val hRate = if (worker.hourlyWageRate > 0L) worker.hourlyWageRate
+                                        else if (worker.baseHourlyWage > 0L) worker.baseHourlyWage
+                                        else if (hHours > 0.0) (perf.hourlyPayTotal / hHours).toLong()
+                                        else 0L
+
+                            if (perf.hourlyPayTotal > 0L || hHours > 0.0 || worker.isHourlyEnabled) {
+                                val hHoursClean = Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))
+                                val hRateStr = Formatters.formatCurrency(hRate)
+                                val hTotalStr = Formatters.formatCurrency(perf.hourlyPayTotal)
+                                Text(
+                                    text = if (hHours > 0.0) {
+                                        "دستمزد ساعتی: $hHoursClean ساعت (هر ساعت $hRateStr) = $hTotalStr"
+                                    } else {
+                                        "دستمزد ساعتی: (هر ساعت $hRateStr) = ۰ تومان"
+                                    },
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = CyanAccent
+                                )
+                            }
+
+                            // ۴. کل اضافه کاری گرفته شده به فرمت درخواستی:
+                            // اضافه کار: ۲ ساعت ( هر ساعت 100000 تومان)= 200000 تومان
+                            val otHours = perf.overtimeHours
+                            val otRate = if (worker.overtimeRate > 0L) worker.overtimeRate
+                                         else if (otHours > 0.0) (perf.overtimePayTotal / otHours).toLong()
+                                         else 0L
+
+                            if (perf.overtimePayTotal > 0L || otHours > 0.0) {
+                                val otHoursClean = Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))
+                                val otRateStr = Formatters.formatCurrency(otRate)
+                                val otTotalStr = Formatters.formatCurrency(perf.overtimePayTotal)
+                                Text(
+                                    text = "اضافه کار: $otHoursClean ساعت (هر ساعت $otRateStr) = $otTotalStr",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = AmberAccent
+                                )
+                            }
+
+                            // ۵. کل ایاب و ذهاب و کمک هزینه‌های افزایشی (مبالغ افزایشی)
+                            if (perf.totalAllowances > 0L) {
+                                HorizontalDivider(thickness = 0.5.dp, color = Slate200)
+                                Text(
+                                    text = "کمک‌هزینه‌ها و ایاب و ذهاب (افزایشی):",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = IndigoAccent
+                                )
+                                if (perf.transitAllowanceTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "ایاب و ذهاب (افزایش پرداختی):",
+                                        amount = perf.transitAllowanceTotal,
+                                        color = IndigoAccent
+                                    )
+                                }
+                                if (perf.foodAllowanceTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کمک‌هزینه خوراک:",
+                                        amount = perf.foodAllowanceTotal,
+                                        color = IndigoAccent
+                                    )
+                                }
+                                if (perf.accommodationAllowanceTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "حق مسکن و اسکان:",
+                                        amount = perf.accommodationAllowanceTotal,
+                                        color = IndigoAccent
+                                    )
+                                }
+                                if (perf.medicalAllowanceTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کمک‌هزینه درمانی:",
+                                        amount = perf.medicalAllowanceTotal,
+                                        color = IndigoAccent
+                                    )
+                                }
+                                ProjectDetailRow(
+                                    title = "مجموع کل افزایش‌ها:",
+                                    amount = perf.totalAllowances,
+                                    color = IndigoAccent
+                                )
+                            }
+
+                            // ۶. کل کسورات کاهشی (ایاب و ذهاب کاهشی، مسکن، خوراک، درمان)
+                            if (perf.totalDeductions > 0L) {
+                                HorizontalDivider(thickness = 0.5.dp, color = Slate200)
+                                Text(
+                                    text = "کسورات و کاهشی‌های حقوق شخص:",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = RoseAccent
+                                )
+                                if (perf.transitDeductionTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کسر ایاب و ذهاب:",
+                                        amount = perf.transitDeductionTotal,
+                                        color = RoseAccent,
+                                        isNegative = true
+                                    )
+                                }
+                                if (perf.accommodationDeductionTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کسر هزینه مسکن:",
+                                        amount = perf.accommodationDeductionTotal,
+                                        color = RoseAccent,
+                                        isNegative = true
+                                    )
+                                }
+                                if (perf.foodDeductionTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کسر هزینه خوراک:",
+                                        amount = perf.foodDeductionTotal,
+                                        color = RoseAccent,
+                                        isNegative = true
+                                    )
+                                }
+                                if (perf.medicalDeductionTotal > 0L) {
+                                    ProjectDetailRow(
+                                        title = "کسر هزینه درمان:",
+                                        amount = perf.medicalDeductionTotal,
+                                        color = RoseAccent,
+                                        isNegative = true
+                                    )
+                                }
+                                ProjectDetailRow(
+                                    title = "مجموع کل کسورات:",
+                                    amount = perf.totalDeductions,
+                                    color = RoseAccent,
+                                    isNegative = true
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // ۷. کادر خالص پرداختی نهایی این شخص در کل پروژه
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = EmeraldAccent.copy(alpha = 0.12f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "مجموع خالص دریافتی این شخص تا امروز:",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = Formatters.formatCurrency(perf.netPayout),
+                                fontSize = 13.5.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = EmeraldAccent
+                            )
                         }
                     }
                 }
@@ -597,69 +802,29 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun DailyMetricCard(
-    title: String,
-    value: String,
-    subtitle: String,
-    accentColor: Color,
-    modifier: Modifier = Modifier
-) {
-    HairlineCard(
-        modifier = modifier,
-        backgroundColor = Slate100,
-        shape = RoundedCornerShape(14.dp)
-    ) {
-        Column(modifier = Modifier.padding(10.dp)) {
-            Text(
-                text = title,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = value,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-                color = accentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                text = subtitle,
-                fontSize = 10.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-@Composable
-private fun DailyDetailItem(
+private fun ProjectDetailRow(
     title: String,
     amount: Long,
-    color: Color
+    color: Color,
+    isNegative: Boolean = false,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 3.dp),
+            .padding(vertical = 2.5.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = title,
-            fontSize = 11.5.sp,
+            fontSize = 11.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
+        val prefix = if (isNegative && amount > 0L) "- " else ""
         Text(
-            text = Formatters.formatCurrency(amount),
-            fontSize = 12.sp,
+            text = "$prefix${Formatters.formatCurrency(amount)}",
+            fontSize = 11.5.sp,
             fontWeight = FontWeight.Bold,
             color = color
         )

@@ -67,6 +67,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
             expenseDao = database.expenseDao()
         )
         viewModelScope.launch {
+            repository.ensureOnlySepehrProject()
             repository.allFolders.collect { folderList ->
                 if (folderList.isEmpty()) {
                     currentFolder.value = null
@@ -238,6 +239,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
             activeWorkersCount = workerList.count { it.isActive },
             todayAttendanceCount = todayCount,
             totalWorkDaysCount = totalWorkDays,
+            totalPersonDays = totalWorkDays,
             totalWorkHours = totalHours,
             totalOvertimeHours = totalOtHours,
             totalWagesPaid = totalWages,
