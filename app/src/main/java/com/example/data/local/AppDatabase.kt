@@ -279,48 +279,20 @@ abstract class AppDatabase : RoomDatabase() {
                 }
                 dateCursor.close()
 
-                // 2. Create worker mapping to merge duplicates across days
-                db.execSQL("CREATE TEMPORARY TABLE IF NOT EXISTS `worker_id_map` (`old_id` INTEGER PRIMARY KEY, `canonical_id` INTEGER)")
-                db.execSQL("""
-                    INSERT INTO `worker_id_map` (`old_id`, `canonical_id`)
-                    SELECT w.id, c.canonical_id
-                    FROM `workers` w
-                    INNER JOIN (
-                        SELECT folderId, name, MIN(id) AS canonical_id
-                        FROM `workers`
-                        GROUP BY folderId, name
-                    ) c ON w.folderId = c.folderId AND w.name = c.name
-                """.trimIndent())
-
-                // 3. Update attendance workerId with canonical_id
-                db.execSQL("""
-                    UPDATE `attendance`
-                    SET `workerId` = (
-                        SELECT `canonical_id` FROM `worker_id_map` WHERE `worker_id_map`.`old_id` = `attendance`.`workerId`
-                    )
-                    WHERE `workerId` IN (SELECT `old_id` FROM `worker_id_map`)
-                """.trimIndent())
-
-                // 4. Update expenses workerId with canonical_id
-                db.execSQL("""
-                    UPDATE `expenses`
-                    SET `workerId` = (
-                        SELECT `canonical_id` FROM `worker_id_map` WHERE `worker_id_map`.`old_id` = `expenses`.`workerId`
-                    )
-                    WHERE `workerId` IN (SELECT `old_id` FROM `worker_id_map`)
-                """.trimIndent())
-
-                // 5. Deduplicate attendance rows before creating unique index on (workerId, date)
+                // 2. Deduplicate attendance rows before creating unique index on (workerId, date).
+                // Keep the record with the latest timestamp (tie-break with max id).
                 db.execSQL("""
                     DELETE FROM `attendance`
-                    WHERE `id` NOT IN (
-                        SELECT MAX(`id`)
-                        FROM `attendance`
-                        GROUP BY `workerId`, `date`
+                    WHERE `id` IN (
+                        SELECT a1.id
+                        FROM `attendance` a1
+                        JOIN `attendance` a2 ON a1.workerId = a2.workerId AND a1.date = a2.date
+                        WHERE (a1.timestamp < a2.timestamp) OR (a1.timestamp = a2.timestamp AND a1.id < a2.id)
                     )
                 """.trimIndent())
 
-                // 6. Recreate workers table (without dateFolderId, workDate, dayOfWeek; with ForeignKey to workplace_folders)
+                // 3. Recreate workers table (without dateFolderId, workDate, dayOfWeek; with ForeignKey to workplace_folders)
+                // RULE: Worker identity is strictly worker.id. NO worker merging across names or folders.
                 db.execSQL("""
                     CREATE TABLE `workers_new` (
                         `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -353,6 +325,7 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
 
+                // Copy all existing workers preserving their exact ids
                 db.execSQL("""
                     INSERT INTO `workers_new` (
                         `id`, `folderId`, `name`, `role`, `phone`, `nationalId`, `baseDailyWage`, `baseHourlyWage`,
@@ -366,15 +339,13 @@ abstract class AppDatabase : RoomDatabase() {
                         `isActive`, `notes`, `colorTag`, `transitAllowance`, `transitImpact`, `foodAllowance`, `foodImpact`,
                         `accommodationAllowance`, `accommodationImpact`, `medicalAllowance`, `medicalImpact`, `createdAt`
                     FROM `workers`
-                    WHERE `id` IN (SELECT DISTINCT `canonical_id` FROM `worker_id_map`)
                 """.trimIndent())
 
                 db.execSQL("DROP TABLE `workers`")
                 db.execSQL("ALTER TABLE `workers_new` RENAME TO `workers`")
                 db.execSQL("CREATE INDEX `index_workers_folderId` ON `workers` (`folderId`)")
-                db.execSQL("DROP TABLE IF EXISTS `worker_id_map`")
 
-                // 7. Recreate date_folders table with epochDay
+                // 4. Recreate date_folders table with epochDay
                 db.execSQL("""
                     CREATE TABLE `date_folders_new` (
                         `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -396,7 +367,7 @@ abstract class AppDatabase : RoomDatabase() {
                 """.trimIndent())
 
                 for ((dateStr, epoch) in dateEpochMap) {
-                    db.execSQL("UPDATE `date_folders_new` SET `epochDay` = $epoch WHERE `date` = '$dateStr'")
+                    db.execSQL("UPDATE `date_folders_new` SET `epochDay` = ? WHERE `date` = ?", arrayOf<Any>(epoch, dateStr))
                 }
 
                 db.execSQL("DROP TABLE `date_folders`")
@@ -405,7 +376,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX `index_date_folders_folderId_date` ON `date_folders` (`folderId`, `date`)")
                 db.execSQL("CREATE INDEX `index_date_folders_epochDay` ON `date_folders` (`epochDay`)")
 
-                // 8. Recreate attendance table with status, dateFolderId, epochDay, foreign keys and unique index
+                // 5. Recreate attendance table with status, dateFolderId, epochDay, foreign keys and unique index
                 db.execSQL("""
                     CREATE TABLE `attendance_new` (
                         `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -456,15 +427,21 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
 
-                // Convert notes to status
-                db.execSQL("UPDATE `attendance_new` SET `status` = 'ABSENT' WHERE `notes` LIKE '%غیبت%' OR (`regularHours` = 0.0 AND `hourlyHours` = 0.0)")
-                db.execSQL("UPDATE `attendance_new` SET `status` = 'HALF_DAY' WHERE `notes` LIKE '%نصف روز%' OR (`regularHours` = 4.0 AND `notes` NOT LIKE '%غیبت%')")
-                db.execSQL("UPDATE `attendance_new` SET `status` = 'HOURLY' WHERE `notes` LIKE '%ساعتی%' OR (`hourlyHours` > 0.0 AND `regularHours` = 0.0)")
-                db.execSQL("UPDATE `attendance_new` SET `status` = 'FULL_DAY' WHERE `status` NOT IN ('ABSENT', 'HALF_DAY', 'HOURLY')")
+                // Convert status with single CASE WHEN statement respecting explicit priorities
+                db.execSQL("""
+                    UPDATE `attendance_new`
+                    SET `status` = CASE
+                        WHEN `notes` LIKE '%غیبت%' THEN 'ABSENT'
+                        WHEN `hourlyHours` > 0.0 OR `notes` LIKE '%ساعتی%' THEN 'HOURLY'
+                        WHEN `notes` LIKE '%نصف روز%' OR `regularHours` = 4.0 THEN 'HALF_DAY'
+                        WHEN `regularHours` = 0.0 AND `hourlyHours` = 0.0 THEN 'ABSENT'
+                        ELSE 'FULL_DAY'
+                    END
+                """.trimIndent())
                 db.execSQL("UPDATE `attendance_new` SET `notes` = '' WHERE `notes` IN ('تمام روز', 'نصف روز', 'ساعتی', 'غیبت')")
 
                 for ((dateStr, epoch) in dateEpochMap) {
-                    db.execSQL("UPDATE `attendance_new` SET `epochDay` = $epoch WHERE `date` = '$dateStr'")
+                    db.execSQL("UPDATE `attendance_new` SET `epochDay` = ? WHERE `date` = ?", arrayOf<Any>(epoch, dateStr))
                 }
 
                 db.execSQL("DROP TABLE `attendance`")
@@ -476,7 +453,7 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX `index_attendance_epochDay` ON `attendance` (`epochDay`)")
                 db.execSQL("CREATE UNIQUE INDEX `index_attendance_workerId_date` ON `attendance` (`workerId`, `date`)")
 
-                // 9. Recreate expenses table with ForeignKey and epochDay
+                // 6. Recreate expenses table with ForeignKey and epochDay
                 db.execSQL("""
                     CREATE TABLE `expenses_new` (
                         `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
@@ -512,7 +489,7 @@ abstract class AppDatabase : RoomDatabase() {
                 """.trimIndent())
 
                 for ((dateStr, epoch) in dateEpochMap) {
-                    db.execSQL("UPDATE `expenses_new` SET `epochDay` = $epoch WHERE `date` = '$dateStr'")
+                    db.execSQL("UPDATE `expenses_new` SET `epochDay` = ? WHERE `date` = ?", arrayOf<Any>(epoch, dateStr))
                 }
 
                 db.execSQL("DROP TABLE `expenses`")
@@ -521,6 +498,20 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX `index_expenses_workerId` ON `expenses` (`workerId`)")
                 db.execSQL("CREATE INDEX `index_expenses_date` ON `expenses` (`date`)")
                 db.execSQL("CREATE INDEX `index_expenses_epochDay` ON `expenses` (`epochDay`)")
+
+                // 7. Check and enforce foreign key integrity
+                val fkCursor = db.query("PRAGMA foreign_key_check")
+                val fkViolations = mutableListOf<Pair<String, Long>>()
+                while (fkCursor.moveToNext()) {
+                    val table = fkCursor.getString(0)
+                    val rowid = fkCursor.getLong(1)
+                    fkViolations.add(table to rowid)
+                }
+                fkCursor.close()
+
+                for ((table, rowid) in fkViolations) {
+                    db.execSQL("DELETE FROM `$table` WHERE rowid = ?", arrayOf<Any>(rowid))
+                }
             }
         }
 

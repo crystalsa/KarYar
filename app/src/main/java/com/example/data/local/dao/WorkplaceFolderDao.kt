@@ -2,10 +2,9 @@ package com.example.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.example.data.local.entity.WorkplaceFolderEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -20,7 +19,7 @@ interface WorkplaceFolderDao {
     @Query("SELECT * FROM workplace_folders")
     suspend fun getAllFoldersSync(): List<WorkplaceFolderEntity>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertFolder(folder: WorkplaceFolderEntity): Long
 
     @Update

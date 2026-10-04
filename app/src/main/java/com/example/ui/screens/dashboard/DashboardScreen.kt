@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Business
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -42,14 +43,17 @@ import androidx.compose.material.icons.filled.LocalDining
 import androidx.compose.material.icons.filled.MedicalServices
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.TrendingDown
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -64,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -104,6 +109,35 @@ fun DashboardScreen(
     // 1. When app starts fresh without any folder selected:
     // "صفحه اول کار وقتی شروع میشه باید خالی باشه"
     if (folder == null) {
+        var showSampleConfirm by remember { mutableStateOf(false) }
+
+        if (showSampleConfirm) {
+            AlertDialog(
+                onDismissRequest = { showSampleConfirm = false },
+                title = { Text("بارگذاری داده‌های نمونه", fontWeight = FontWeight.Bold, fontSize = 15.sp) },
+                text = { Text("همه داده‌های فعلی پاک می‌شود. آیا مطمئن هستید که می‌خواهید داده‌های نمونه را بارگذاری کنید؟", fontSize = 12.5.sp) },
+                confirmButton = {
+                    LoadingButton(
+                        text = "بارگذاری داده نمونه",
+                        icon = Icons.Default.PlaylistAdd,
+                        onClick = {
+                            viewModel.loadSampleData(clearFirst = true)
+                            showSampleConfirm = false
+                        },
+                        containerColor = EmeraldAccent,
+                        height = 38.dp,
+                        fontSize = 12.sp,
+                        testTag = "dashboard_confirm_load_sample_data"
+                    )
+                },
+                dismissButton = {
+                    TextButton(onClick = { showSampleConfirm = false }) {
+                        Text("انصراف", fontSize = 12.sp)
+                    }
+                }
+            )
+        }
+
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -129,7 +163,7 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "هیچ پوشه کاری انتخاب نشده است",
+                        text = "هیچ پروژه‌ای انتخاب نشده است",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
@@ -137,20 +171,38 @@ fun DashboardScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "برای شروع حساب و کتاب، لطفاً ابتدا یک پوشه برای محل کار یا پروژه خود ایجاد کنید.",
+                        text = "برای شروع حساب و کتاب، لطفاً ابتدا یک پروژه ایجاد کنید یا داده‌های نمونه را بارگذاری نمایید.",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = 18.sp
+                        lineHeight = 18.sp,
+                        textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(18.dp))
-                    LoadingButton(
-                        text = "مدیریت پوشه‌های محل کار",
-                        icon = Icons.Default.FolderOpen,
-                        onClick = onChangeFolder,
-                        containerColor = AmberAccent,
-                        height = 42.dp,
-                        fontSize = 13.sp
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        LoadingButton(
+                            text = "ساخت اولین پروژه",
+                            icon = Icons.Default.Add,
+                            onClick = onChangeFolder,
+                            containerColor = AmberAccent,
+                            modifier = Modifier.weight(1f),
+                            height = 42.dp,
+                            fontSize = 13.sp,
+                            testTag = "dashboard_create_first_project_button"
+                        )
+                        LoadingButton(
+                            text = "بارگذاری داده نمونه",
+                            icon = Icons.Default.PlaylistAdd,
+                            onClick = { showSampleConfirm = true },
+                            containerColor = EmeraldAccent,
+                            modifier = Modifier.weight(1f),
+                            height = 42.dp,
+                            fontSize = 13.sp,
+                            testTag = "dashboard_load_sample_data_button"
+                        )
+                    }
                 }
             }
         }
@@ -166,7 +218,7 @@ fun DashboardScreen(
     val totalProjectAllowances = remember(workerPerformances) { workerPerformances.sumOf { it.totalAllowances } }
     val totalProjectDeductions = remember(workerPerformances) { workerPerformances.sumOf { it.totalDeductions } }
     val totalProjectNetPayout = remember(workerPerformances, analytics) {
-        val fromPerf = workerPerformances.sumOf { it.netPayout }
+        val fromPerf = workerPerformances.sumOf { it.netPayoutBeforeGroup }
         if (fromPerf > 0L) fromPerf else analytics.grandTotalProjectCost
     }
 

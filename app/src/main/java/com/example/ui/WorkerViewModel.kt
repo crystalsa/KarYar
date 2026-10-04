@@ -12,8 +12,10 @@ import com.example.data.local.entity.ExpenseEntity
 import com.example.data.local.entity.WorkerEntity
 import com.example.data.local.entity.WorkplaceFolderEntity
 import com.example.data.repository.WorkerRepository
+import com.example.domain.model.DailyBookkeeping
 import com.example.domain.model.DashboardAnalytics
 import com.example.domain.model.WorkerPerformance
+import com.example.util.FinancialSummary
 import com.example.util.JalaliCalendar
 import com.example.util.WageCalculator
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,33 +25,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-
-data class DailyBookkeeping(
-    val date: String = JalaliCalendar.todayString(),
-    val dayOfWeek: String = JalaliCalendar.todayDayOfWeek(),
-    val grandDailyCost: Long = 0L,
-    val totalDailyWages: Long = 0L,
-    val totalHourlyPay: Long = 0L,
-    val totalOvertimePay: Long = 0L,
-    val dailyExpenses: Long = 0L,
-    val workersPresent: Int = 0,
-    val totalHours: Double = 0.0,
-    val transitCost: Long = 0L,
-    val accommodationCost: Long = 0L,
-    val foodCost: Long = 0L,
-    val medicalCost: Long = 0L,
-    val attendances: List<AttendanceEntity> = emptyList(),
-    val expenses: List<ExpenseEntity> = emptyList()
-) {
-    val totalDailyCost: Long get() = grandDailyCost
-    val totalWagesPaid: Long get() = totalDailyWages + totalHourlyPay
-    val totalOvertimePaid: Long get() = totalOvertimePay
-    val totalExpensesPaid: Long get() = dailyExpenses
-    val workersPresentCount: Int get() = workersPresent
-    val totalHoursWorked: Double get() = totalHours
-}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WorkerViewModel(application: Application) : AndroidViewModel(application) {
@@ -67,7 +45,6 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
             expenseDao = database.expenseDao()
         )
         viewModelScope.launch {
-            repository.ensureOnlySepehrProject()
             repository.allFolders.collect { folderList ->
                 if (folderList.isEmpty()) {
                     currentFolder.value = null
@@ -154,127 +131,62 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
         selectedDailyDate,
         workers,
         attendanceList,
-        expenses,
-        dateFolders
-    ) { dateStr, workerList, attList, expList, dfList ->
-        var wages = 0L
-        var hourlyPay = 0L
-        var overtimePay = 0L
-        var allowancesNet = 0L
-        var hours = 0.0
-        var presentCount = 0
-
-        for (worker in workerList) {
-            val att = attList.firstOrNull { it.workerId == worker.id && it.date == dateStr }
-            val res = WageCalculator.calculateDay(worker, att)
-            if (res.isWorkingDay) {
-                presentCount++
-                wages += res.baseWage
-                hourlyPay += res.hourlyPay
-                overtimePay += res.overtimePay
-                allowancesNet += (res.totalAllowances - res.totalDeductions)
-                hours += (res.regularHours + res.hourlyHours + res.overtimeHours)
-            }
-        }
-
-        val grandDailyCost = wages + hourlyPay + overtimePay + allowancesNet
-
-        DailyBookkeeping(
-            date = dateStr,
-            dayOfWeek = JalaliCalendar.getDayOfWeek(dateStr),
-            grandDailyCost = grandDailyCost.coerceAtLeast(0L),
-            totalDailyWages = wages,
-            totalHourlyPay = hourlyPay,
-            totalOvertimePay = overtimePay,
-            dailyExpenses = 0L,
-            workersPresent = presentCount,
-            totalHours = hours,
-            transitCost = 0L,
-            accommodationCost = 0L,
-            foodCost = 0L,
-            medicalCost = 0L,
-            attendances = attList.filter { it.date == dateStr },
-            expenses = emptyList()
+        expenses
+    ) { dateStr, workerList, attList, expList ->
+        WageCalculator.calculateDailyBookkeeping(
+            dateStr = dateStr,
+            workers = workerList,
+            attendances = attList,
+            expenses = expList
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DailyBookkeeping())
 
-    // Reactive Analytics for the current folder - synced with all days & all workers
-    val analytics: StateFlow<DashboardAnalytics> = combine(
-        workers,
-        attendanceList,
-        expenses,
-        dateFolders
-    ) { workerList, attList, expList, dfList ->
-        val todayStr = JalaliCalendar.todayString()
-        var totalHours = 0.0
-        var totalOtHours = 0.0
-        var totalWages = 0L
-        var totalHourlyPaid = 0L
-        var totalOtPay = 0L
-        var totalAllowancesNet = 0L
-        var todayCount = 0
-        var totalWorkDays = 0
-
-        val workerMap = workerList.associateBy { it.id }
-
-        for (att in attList) {
-            val worker = workerMap[att.workerId] ?: continue
-            val res = WageCalculator.calculateDay(worker, att)
-            if (res.isWorkingDay) {
-                totalWorkDays++
-                if (att.date == todayStr) todayCount++
-                totalWages += res.baseWage
-                totalHourlyPaid += res.hourlyPay
-                totalOtPay += res.overtimePay
-                totalOtHours += res.overtimeHours
-                totalHours += (res.regularHours + res.hourlyHours + res.overtimeHours)
-                totalAllowancesNet += (res.totalAllowances - res.totalDeductions)
-            }
-        }
-
-        val grandTotalCost = (totalWages + totalHourlyPaid + totalOtPay + totalAllowancesNet).coerceAtLeast(0L)
-
-        DashboardAnalytics(
-            totalWorkersCount = workerList.size,
-            activeWorkersCount = workerList.count { it.isActive },
-            todayAttendanceCount = todayCount,
-            totalWorkDaysCount = totalWorkDays,
-            totalPersonDays = totalWorkDays,
-            totalWorkHours = totalHours,
-            totalOvertimeHours = totalOtHours,
-            totalWagesPaid = totalWages,
-            totalHourlyPaid = totalHourlyPaid,
-            totalOvertimePaid = totalOtPay,
-            totalTransitExpenses = 0L,
-            totalAccommodationExpenses = 0L,
-            totalAccommodationDays = 0,
-            totalFoodExpenses = 0L,
-            totalMedicalExpenses = 0L,
-            totalOtherExpenses = 0L,
-            totalIndividualExpenses = 0L,
-            totalGroupExpenses = 0L,
-            grandTotalExpenses = 0L,
-            grandTotalProjectCost = grandTotalCost
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardAnalytics())
-
-    // Worker Performance Summaries (with Allowance / Deduction support and Hourly/Overtime calculations)
-    val workerPerformances: StateFlow<List<WorkerPerformance>> = combine(
+    // Unified Project Financial Summary (single source of truth for analytics & performances)
+    val financialSummary: StateFlow<FinancialSummary> = combine(
         workers,
         attendanceList,
         expenses
-    ) { workerList, attList, _ ->
-        val sharePerWorker = 0L
+    ) { workerList, attList, expList ->
+        WageCalculator.calculateFinancialSummary(
+            workers = workerList,
+            attendances = attList,
+            expenses = expList
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), FinancialSummary.EMPTY)
 
-        workerList.map { worker ->
-            val workerAtts = attList.filter { it.workerId == worker.id }
-            WageCalculator.calculateWorkerPerformance(
-                worker = worker,
-                attendances = workerAtts,
-                groupExpenseShare = sharePerWorker
-            )
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // Worker Performance Summaries directly from unified FinancialSummary
+    val workerPerformances: StateFlow<List<WorkerPerformance>> = financialSummary
+        .map { it.workerPerformances }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Reactive Analytics for the current folder - synced with all days & all workers
+    val analytics: StateFlow<DashboardAnalytics> = combine(
+        financialSummary,
+        workers
+    ) { summary, workerList ->
+        DashboardAnalytics(
+            totalWorkersCount = workerList.size,
+            activeWorkersCount = workerList.count { it.isActive },
+            todayAttendanceCount = summary.todayAttendanceCount,
+            totalWorkDaysCount = summary.totalWorkDaysCount,
+            totalPersonDays = summary.totalWorkDaysCount,
+            totalWorkHours = summary.totalWorkHours,
+            totalOvertimeHours = summary.totalOvertimeHours,
+            totalWagesPaid = summary.totalBaseWagesPaid,
+            totalHourlyPaid = summary.totalHourlyPaid,
+            totalOvertimePaid = summary.totalOvertimePaid,
+            totalTransitExpenses = summary.totalTransitExpenses,
+            totalAccommodationExpenses = summary.totalAccommodationExpenses,
+            totalAccommodationDays = summary.totalAccommodationDays,
+            totalFoodExpenses = summary.totalFoodExpenses,
+            totalMedicalExpenses = summary.totalMedicalExpenses,
+            totalOtherExpenses = summary.totalOtherExpenses,
+            totalIndividualExpenses = summary.totalIndividualExpenses,
+            totalGroupExpenses = summary.totalGroupExpenses,
+            grandTotalExpenses = summary.grandTotalExpenses,
+            grandTotalProjectCost = summary.grandTotalProjectCost
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardAnalytics())
 
     // Selection Handlers
     fun selectFolder(folder: WorkplaceFolderEntity?) {
@@ -821,7 +733,11 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                 currentFolder.value = null
                 selectedDateFolder.value = null
             }
-            repository.loadSampleData()
+            val newFolderId = repository.loadSampleData()
+            val newFolder = repository.getFolderById(newFolderId)
+            if (newFolder != null) {
+                currentFolder.value = newFolder
+            }
         }
     }
 

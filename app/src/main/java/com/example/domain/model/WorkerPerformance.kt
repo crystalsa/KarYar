@@ -26,7 +26,8 @@ data class WorkerPerformance(
     val accommodationDeductionTotal: Long = 0L,
     val medicalDeductionTotal: Long = 0L,
 
-    val groupExpenseShare: Long,
+    val groupExpenseShare: Long = 0L,
+    val netPayoutBeforeGroup: Long = 0L,
     val netPayout: Long
 ) {
     val individualExpensesTotal: Long

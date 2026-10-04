@@ -97,18 +97,28 @@ class WageCalculatorTest {
         assertEquals(600_000L, result.netPayout)
     }
 
-    // 5. Half day detected by notes = "نصف روز"
+    // 5. Half-day is strictly determined by AttendanceStatus.HALF_DAY, notes never determine status
     @Test
-    fun testHalfDay_detectedByNotes() {
-        val att = AttendanceEntity(
+    fun testHalfDay_strictlyDeterminedByStatus() {
+        val attHalf = AttendanceEntity(
             workerId = 1L,
             date = "1405/01/01",
-            regularHours = 4.0,
-            notes = "نصف روز"
+            status = AttendanceStatus.HALF_DAY,
+            regularHours = 4.0
         )
-        assertTrue(WageCalculator.isHalfDay(baseDailyWorker, att))
-        val result = WageCalculator.calculateDay(baseDailyWorker, att)
-        assertEquals(500_000L, result.baseWage)
+        assertTrue(WageCalculator.isHalfDay(baseDailyWorker, attHalf))
+        val resultHalf = WageCalculator.calculateDay(baseDailyWorker, attHalf)
+        assertEquals(500_000L, resultHalf.baseWage)
+
+        val attFullWithNotes = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/01",
+            status = AttendanceStatus.FULL_DAY,
+            regularHours = 8.0,
+            notes = "نصف روز کار کرد اما کامل ثبت شد"
+        )
+        assertFalse(WageCalculator.isHalfDay(baseDailyWorker, attFullWithNotes))
+        assertTrue(WageCalculator.isFullDay(baseDailyWorker, attFullWithNotes))
     }
 
     // 6. Hourly worker calculation (hours * rate)
@@ -169,33 +179,57 @@ class WageCalculatorTest {
         assertEquals(0L, result.netPayout)
     }
 
-    // 9. Absent day marked with notes = "غیبت"
+    // 9. Notes containing "غیبت" in a present day's explanation must NOT make the worker absent
     @Test
-    fun testAbsent_notesGhiebat() {
+    fun testAbsent_notesContainingGhiebatDoesNotMakeWorkerAbsent() {
         val att = AttendanceEntity(
             workerId = 1L,
             date = "1405/01/01",
-            regularHours = 8.0, // even if hours were mistakenly left > 0
-            notes = "غیبت"
+            status = AttendanceStatus.FULL_DAY,
+            regularHours = 8.0,
+            notes = "توضیح: جلسه با مدیر، دیروز غیبت داشت ولی امروز کامل حاضر شد"
         )
-        assertTrue(WageCalculator.isAbsent(baseDailyWorker, att))
+        assertFalse(WageCalculator.isAbsent(baseDailyWorker, att))
+        assertTrue(WageCalculator.isFullDay(baseDailyWorker, att))
         val result = WageCalculator.calculateDay(baseDailyWorker, att)
-        assertFalse(result.isWorkingDay)
-        assertEquals(0L, result.netPayout)
+        assertTrue(result.isWorkingDay)
+        assertEquals(1_000_000L, result.baseWage)
+        assertEquals(1_000_000L, result.netPayout)
     }
 
-    // 10. Daily worker with regularHours = 0 and no half/full marker treated as absent
+    // 10. Status = ABSENT is required for absence; zero regularHours on FULL_DAY does not override status
     @Test
-    fun testAbsent_zeroRegularHoursDailyWorker() {
-        val att = AttendanceEntity(
+    fun testAbsent_strictlyRequiresStatusAbsent() {
+        val attAbsent = AttendanceEntity(
             workerId = 1L,
             date = "1405/01/01",
+            status = AttendanceStatus.ABSENT,
             regularHours = 0.0
         )
-        assertTrue(WageCalculator.isAbsent(baseDailyWorker, att))
-        val result = WageCalculator.calculateDay(baseDailyWorker, att)
-        assertFalse(result.isWorkingDay)
-        assertEquals(0L, result.netPayout)
+        assertTrue(WageCalculator.isAbsent(baseDailyWorker, attAbsent))
+        val resultAbsent = WageCalculator.calculateDay(baseDailyWorker, attAbsent)
+        assertFalse(resultAbsent.isWorkingDay)
+        assertEquals(0L, resultAbsent.netPayout)
+    }
+
+    // 10b. Overtime zero on attendance when profile has overtimeHours
+    @Test
+    fun testOvertime_zeroOvertimeOnAttendanceWithProfileOvertimeHours() {
+        val workerWithProfileOvertime = baseDailyWorker.copy(
+            overtimeHours = 4.0,
+            overtimeRate = 150_000L
+        )
+        val attZeroOt = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/01",
+            status = AttendanceStatus.FULL_DAY,
+            regularHours = 8.0,
+            overtimeHours = 0.0 // explicitly zero overtime
+        )
+        val result = WageCalculator.calculateDay(workerWithProfileOvertime, attZeroOt)
+        assertEquals(0L, result.overtimePay)
+        assertEquals(0.0, result.overtimeHours, 0.001)
+        assertEquals(1_000_000L, result.netPayout)
     }
 
     // 11. Overtime with explicit overtime rate
@@ -493,5 +527,133 @@ class WageCalculatorTest {
         assertEquals(70_000L, perf.totalDeductions)
         // Net: 1,000,000 + 240,000 + 40,000 - 70,000 = 1,210,000
         assertEquals(1_210_000L, perf.netPayout)
+    }
+
+    // 25. Zero-capping applied ONLY ONCE at worker cumulative level, NOT daily
+    @Test
+    fun testZeroFloor_onlyAppliedAtWorkerCumulativeLevelNotDaily() {
+        val worker = baseDailyWorker.copy(
+            baseDailyWage = 300_000L,
+            accommodationAllowance = 100_000L,
+            accommodationImpact = "DEDUCTION"
+        )
+        // Day 1: Absent -> gross 0, deduction 100k -> raw net -100k, but day net clamped to 0
+        val dayAbsent = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/01",
+            status = AttendanceStatus.ABSENT
+        )
+        // Day 2: Present -> gross 300k, deduction 100k -> net 200k
+        val dayPresent = AttendanceEntity(
+            workerId = 1L,
+            date = "1405/01/02",
+            status = AttendanceStatus.FULL_DAY,
+            regularHours = 8.0
+        )
+
+        val resAbsent = WageCalculator.calculateDay(worker, dayAbsent)
+        val resPresent = WageCalculator.calculateDay(worker, dayPresent)
+        assertEquals(0L, resAbsent.netPayout) // Daily display is clamped to 0
+        assertEquals(200_000L, resPresent.netPayout)
+
+        // Cumulative: gross (300k) - total deductions (100k + 100k = 200k) = 100,000L
+        val perf = WageCalculator.calculateWorkerPerformance(worker, listOf(dayAbsent, dayPresent))
+        assertEquals(300_000L, perf.baseWageTotal)
+        assertEquals(200_000L, perf.totalDeductions)
+        assertEquals(100_000L, perf.netPayout) // 100,000L, NOT 200,000L from summing daily nets!
+
+        // If total deductions exceed total gross, worker cumulative net is capped at 0
+        val workerHighDeductions = worker.copy(
+            accommodationAllowance = 250_000L // 250k * 2 = 500k deductions vs 300k gross
+        )
+        val perfCapped = WageCalculator.calculateWorkerPerformance(workerHighDeductions, listOf(dayAbsent, dayPresent))
+        assertEquals(0L, perfCapped.netPayout)
+    }
+
+    // 26. Unified FinancialSummary: grandTotalProjectCost strictly equals sum of netPayoutBeforeGroup
+    @Test
+    fun testFinancialSummary_grandTotalMatchesSumOfWorkersNetPayoutBeforeGroup() {
+        val workerA = baseDailyWorker.copy(id = 101L, baseDailyWage = 1_000_000L)
+        val workerB = baseHourlyWorker.copy(id = 102L, baseHourlyWage = 200_000L, hourlyWageRate = 200_000L)
+
+        val attA = AttendanceEntity(workerId = 101L, date = "1405/01/01", status = AttendanceStatus.FULL_DAY, regularHours = 8.0)
+        val attB = AttendanceEntity(workerId = 102L, date = "1405/01/01", status = AttendanceStatus.HOURLY, hourlyHours = 5.0, hourlyWageRate = 200_000L)
+
+        val groupExpense = com.example.data.local.entity.ExpenseEntity(
+            id = 1L,
+            folderId = 10L,
+            title = "هزینه کرایه وانت جمعی",
+            category = "TRANSIT",
+            scope = "GROUP",
+            amount = 300_000L,
+            date = "1405/01/01"
+        )
+
+        val summary = WageCalculator.calculateFinancialSummary(
+            workers = listOf(workerA, workerB),
+            attendances = listOf(attA, attB),
+            expenses = listOf(groupExpense),
+            todayStr = "1405/01/01"
+        )
+
+        assertEquals(2, summary.workerPerformances.size)
+        // Worker A: 1,000,000 netBeforeGroup; Worker B: 5 * 200k = 1,000,000 netBeforeGroup
+        val expectedGrandTotal = summary.workerPerformances.sumOf { it.netPayoutBeforeGroup }
+        assertEquals(2_000_000L, expectedGrandTotal)
+        assertEquals(expectedGrandTotal, summary.grandTotalProjectCost)
+        assertEquals(2, summary.totalWorkDaysCount)
+        assertEquals(13.0, summary.totalWorkHours, 0.001) // 8 + 5
+    }
+
+    // 27. Individual and Group expenses strictly mapped by workerId and divided equally among attendees
+    @Test
+    fun testIndividualAndGroupExpenses_strictlyByWorkerIdAndSplitEqually() {
+        val worker1 = baseDailyWorker.copy(id = 501L, baseDailyWage = 1_000_000L)
+        val worker2 = baseDailyWorker.copy(id = 502L, baseDailyWage = 1_200_000L)
+        val workerAbsent = baseDailyWorker.copy(id = 503L, baseDailyWage = 800_000L)
+
+        val att1 = AttendanceEntity(workerId = 501L, date = "1405/01/01", status = AttendanceStatus.FULL_DAY, regularHours = 8.0)
+        val att2 = AttendanceEntity(workerId = 502L, date = "1405/01/01", status = AttendanceStatus.FULL_DAY, regularHours = 8.0)
+        val attAbsent = AttendanceEntity(workerId = 503L, date = "1405/01/01", status = AttendanceStatus.ABSENT)
+
+        val groupExp = com.example.data.local.entity.ExpenseEntity(
+            id = 1L, folderId = 10L, title = "کرایه جمعی", category = "TRANSIT", scope = "GROUP",
+            amount = 200_000L, date = "1405/01/01"
+        )
+        val indivExp1 = com.example.data.local.entity.ExpenseEntity(
+            id = 2L, folderId = 10L, title = "مساعده کارگر ۱", category = "OTHER", scope = "INDIVIDUAL",
+            impactType = "DEDUCTION", workerId = 501L, amount = 50_000L, date = "1405/01/01"
+        )
+        val indivExp2 = com.example.data.local.entity.ExpenseEntity(
+            id = 3L, folderId = 10L, title = "پاداش کارگر ۲", category = "OTHER", scope = "INDIVIDUAL",
+            impactType = "ALLOWANCE", workerId = 502L, amount = 100_000L, date = "1405/01/01"
+        )
+
+        val summary = WageCalculator.calculateFinancialSummary(
+            workers = listOf(worker1, worker2, workerAbsent),
+            attendances = listOf(att1, att2, attAbsent),
+            expenses = listOf(groupExp, indivExp1, indivExp2),
+            todayStr = "1405/01/01"
+        )
+
+        // Only 2 workers worked (worker1 and worker2). Worker 3 was absent.
+        // Group expense 200,000 / 2 = 100,000 per present worker
+        val perf1 = summary.workerPerformances.first { it.worker.id == 501L }
+        val perf2 = summary.workerPerformances.first { it.worker.id == 502L }
+        val perfAbsent = summary.workerPerformances.first { it.worker.id == 503L }
+
+        assertEquals(100_000L, perf1.groupExpenseShare)
+        assertEquals(50_000L, perf1.totalDeductions) // indivExp1
+        assertEquals(950_000L, perf1.netPayoutBeforeGroup) // 1,000,000 - 50,000
+        assertEquals(850_000L, perf1.netPayout) // 950,000 - 100,000 (group)
+
+        assertEquals(100_000L, perf2.groupExpenseShare)
+        assertEquals(100_000L, perf2.totalAllowances) // indivExp2
+        assertEquals(1_300_000L, perf2.netPayoutBeforeGroup) // 1,200,000 + 100,000
+        assertEquals(1_200_000L, perf2.netPayout) // 1,300,000 - 100,000 (group)
+
+        // Absent worker does NOT get group expense share
+        assertEquals(0L, perfAbsent.groupExpenseShare)
+        assertEquals(0L, perfAbsent.netPayout)
     }
 }

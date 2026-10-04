@@ -2,10 +2,9 @@ package com.example.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.example.data.local.entity.DateFolderEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -23,7 +22,7 @@ interface DateFolderDao {
     @Query("SELECT * FROM date_folders WHERE folderId = :folderId AND date = :date LIMIT 1")
     suspend fun getDateFolderByDate(folderId: Long, date: String): DateFolderEntity?
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertDateFolder(dateFolder: DateFolderEntity): Long
 
     @Update

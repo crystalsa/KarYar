@@ -117,14 +117,14 @@ fun FoldersScreen(
                             )
                             Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "هیچ کارگاهی وجود ندارد",
+                                text = "هیچ پروژه‌ای وجود ندارد",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "یک کارگاه جدید بسازید یا داده نمونه بارگذاری کنید.",
+                                text = "یک پروژه جدید بسازید یا داده نمونه بارگذاری کنید.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -135,7 +135,7 @@ fun FoldersScreen(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 LoadingButton(
-                                    text = "ساخت اولین پوشه",
+                                    text = "ساخت اولین پروژه",
                                     icon = Icons.Default.Add,
                                     onClick = { isCreatingFolder = true },
                                     containerColor = AmberAccent,

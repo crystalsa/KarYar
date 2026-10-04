@@ -34,6 +34,7 @@ class WorkerRepository(
 
     suspend fun insertFolder(folder: WorkplaceFolderEntity): Long = folderDao.insertFolder(folder)
     suspend fun updateFolder(folder: WorkplaceFolderEntity) = folderDao.updateFolder(folder)
+    suspend fun getFolderById(folderId: Long): WorkplaceFolderEntity? = folderDao.getFolderById(folderId)
 
     suspend fun insertDateFolder(dateFolder: DateFolderEntity): Long = dateFolderDao.insertDateFolder(dateFolder)
     suspend fun updateDateFolder(dateFolder: DateFolderEntity) = dateFolderDao.updateDateFolder(dateFolder)
@@ -190,7 +191,7 @@ class WorkerRepository(
     suspend fun insertExpense(expense: ExpenseEntity): Long = expenseDao.insertExpense(expense)
     suspend fun deleteExpense(expense: ExpenseEntity) = expenseDao.deleteExpense(expense)
 
-    suspend fun clearAllData() {
+    suspend fun clearAllData() = database.withTransaction {
         folderDao.clearAll()
         dateFolderDao.clearAll()
         workerDao.clearAll()
@@ -199,25 +200,30 @@ class WorkerRepository(
     }
 
     /**
-     * Loads sample data for ONLY Borj Sepehr project, with exactly 2 full working days
-     * and exactly 5 workers with realistic allowances and deductions across both days.
+     * Loads demo / sample data inside a database transaction.
+     * Can be parameterized with project details.
      */
-    suspend fun loadSampleData() {
+    suspend fun loadSampleData(
+        workplaceName: String = "پروژه برج سپهر",
+        foremanName: String = "حاج اصغر کریمی",
+        employerName: String = "مهندس سعیدی",
+        notes: String = "پروژه احداث مجتمع تجاری مسکونی ۲۴ طبقه"
+    ): Long = database.withTransaction {
         val todayJalali = JalaliCalendar.todayString()
         val yesterdayJalali = JalaliCalendar.fromTimestamp(System.currentTimeMillis() - 86400000L).format()
         val twoDaysAgoJalali = JalaliCalendar.fromTimestamp(System.currentTimeMillis() - 172800000L).format()
 
         // ==========================================
-        // ONLY WORKPLACE: پروژه برج سپهر
+        // WORKPLACE
         // ==========================================
         val folder1Id = folderDao.insertFolder(
             WorkplaceFolderEntity(
-                name = "پروژه برج سپهر",
-                foremanName = "حاج اصغر کریمی",
-                employerName = "مهندس سعیدی",
+                name = workplaceName,
+                foremanName = foremanName,
+                employerName = employerName,
                 colorTag = 0xFFD97706L,
                 createdAt = twoDaysAgoJalali,
-                notes = "پروژه احداث مجتمع تجاری مسکونی ۲۴ طبقه"
+                notes = notes
             )
         )
 
@@ -403,6 +409,7 @@ class WorkerRepository(
                 workerId = w2Id,
                 dateFolderId = df1Yesterday,
                 date = yesterdayJalali,
+                status = AttendanceStatus.HOURLY,
                 entryTime = "08:00",
                 exitTime = "17:30",
                 regularHours = 0.0,
@@ -425,6 +432,7 @@ class WorkerRepository(
                 workerId = w3Id,
                 dateFolderId = df1Yesterday,
                 date = yesterdayJalali,
+                status = AttendanceStatus.FULL_DAY,
                 entryTime = "07:45",
                 exitTime = "18:30",
                 regularHours = 8.0,
@@ -447,6 +455,7 @@ class WorkerRepository(
                 workerId = w4Id,
                 dateFolderId = df1Yesterday,
                 date = yesterdayJalali,
+                status = AttendanceStatus.HOURLY,
                 entryTime = "08:00",
                 exitTime = "18:00",
                 regularHours = 0.0,
@@ -516,6 +525,7 @@ class WorkerRepository(
                 workerId = w2Id,
                 dateFolderId = df1Today,
                 date = todayJalali,
+                status = AttendanceStatus.HOURLY,
                 entryTime = "08:00",
                 exitTime = "17:30",
                 regularHours = 0.0,
@@ -538,6 +548,7 @@ class WorkerRepository(
                 workerId = w3Id,
                 dateFolderId = df1Today,
                 date = todayJalali,
+                status = AttendanceStatus.FULL_DAY,
                 entryTime = "07:45",
                 exitTime = "19:00",
                 regularHours = 8.0,
@@ -560,6 +571,7 @@ class WorkerRepository(
                 workerId = w4Id,
                 dateFolderId = df1Today,
                 date = todayJalali,
+                status = AttendanceStatus.HOURLY,
                 entryTime = "08:00",
                 exitTime = "18:00",
                 regularHours = 0.0,
@@ -597,31 +609,7 @@ class WorkerRepository(
                 notes = "تمام روز"
             )
         )
-    }
 
-    /**
-     * Ensures only "پروژه برج سپهر" remains, deleting any other projects,
-     * and ensuring it has exactly 5 workers and 2 working days of records.
-     */
-    suspend fun ensureOnlySepehrProject() {
-        val allFolders = folderDao.getAllFoldersSync()
-        for (f in allFolders) {
-            if (!f.name.contains("سپهر")) {
-                folderDao.deleteFolder(f)
-            }
-        }
-        val sepehrFolders = folderDao.getAllFoldersSync().filter { it.name.contains("سپهر") }
-        if (sepehrFolders.isEmpty()) {
-            loadSampleData()
-        } else {
-            val sepehr = sepehrFolders.first()
-            val workers = workerDao.getWorkersByFolderSync(sepehr.id)
-            val dateFolders = dateFolderDao.getDateFoldersByFolderSync(sepehr.id)
-            val atts = attendanceDao.getAttendanceByFolderSync(sepehr.id)
-            if (workers.size != 5 || dateFolders.size != 2 || atts.size != 10) {
-                clearAllData()
-                loadSampleData()
-            }
-        }
+        folder1Id
     }
 }

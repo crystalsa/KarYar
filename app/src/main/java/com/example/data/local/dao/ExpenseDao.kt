@@ -2,10 +2,9 @@ package com.example.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.example.data.local.entity.ExpenseEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -26,7 +25,7 @@ interface ExpenseDao {
     @Query("SELECT * FROM expenses WHERE folderId = :folderId AND scope = 'GROUP' ORDER BY timestamp DESC")
     fun getGroupExpensesByFolder(folderId: Long): Flow<List<ExpenseEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertExpense(expense: ExpenseEntity): Long
 
     @Update

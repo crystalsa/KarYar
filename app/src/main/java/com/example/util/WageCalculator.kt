@@ -2,30 +2,50 @@ package com.example.util
 
 import com.example.data.local.entity.AttendanceEntity
 import com.example.data.local.entity.AttendanceStatus
+import com.example.data.local.entity.ExpenseEntity
 import com.example.data.local.entity.WorkerEntity
+import com.example.domain.model.DailyBookkeeping
 import com.example.domain.model.WorkerPerformance
-import kotlin.math.round
+import kotlin.math.floor
 
 /**
  * WageCalculator is the single source of truth for all wage, overtime,
  * allowance, deduction, shift counting, and net payout calculations in KarYar.
  *
  * Rules:
- * 1. Absent day (روز غیبت):
- *    - Base daily wage, hourly pay, overtime, allowances, and deductions are ALL ZERO.
+ * 1. Absent day (قانون قطعی روز غیبت):
+ *    - Absence is determined EXCLUSIVELY by AttendanceStatus.ABSENT on AttendanceEntity.status.
+ *    - Base daily wage, hourly pay, overtime, and allowances (مزایای افزایشی) are ALL ZERO.
+ *    - Deductions (کسورات کاهشی مانند سهم اسکان، ایاب و ذهاب و درمان) EVEN on absent days ARE APPLIED
+ *      (کسورات ثابت مانند اسکان یا تعهدات حتی در روز غیبت کسر می‌گردد، ولی دستمزد و مزایا صفر است).
  *    - Absent days do NOT count towards working shifts (isWorkingDay = false).
- * 2. Half day (نصف روز):
+ * 2. Status determination (تشخیص وضعیت کارکرد):
+ *    - Strictly determined by AttendanceEntity.status (FULL_DAY, HALF_DAY, HOURLY, ABSENT).
+ *    - The notes field is free-form description and NEVER determines or overrides worker status.
+ * 3. Hours and Rates (ساعات کارکرد و نرخ‌ها):
+ *    - Worker's overtimeHours and hourlyHours in their profile are initial templates for new records,
+ *      NOT defaults during calculation. If an attendance record has 0.0 overtime hours, it means 0.0 overtime.
+ *    - Rates (overtimeRate, hourlyWageRate) fallback to the worker profile if not specified in attendance.
+ * 4. Half day (نصف روز):
  *    - Base daily wage is half of worker's daily wage: roundToLong(worker.baseDailyWage / 2.0).
- *    - Allowances and deductions apply once per present day.
- * 3. Hourly (ساعتی):
+ *    - Allowances and deductions apply once per working day.
+ * 5. Hourly (ساعتی):
  *    - Hourly pay is roundToLong(hours * rate).
- *    - Overtime is calculated ONLY when hours > 0 and the worker is not absent.
- * 4. Overtime multiplier:
- *    - Configurable parameter [overtimeMultiplier] with default 1.4.
- * 5. Uniform rounding:
- *    - All amounts are rounded using [roundToLong] instead of integer truncation.
- * 6. Minimum net payout:
- *    - Net payout cannot be negative; capped at 0.
+ *    - Overtime is calculated when overtimeHours > 0 and worker is not absent.
+ * 6. Zero capping (قانون سقف صفر coerceAtLeast(0)):
+ *    - Minimum net payout cap of 0 is applied ONLY ONCE to the final cumulative total of each worker:
+ *      (grossTotal - deductionsTotal).coerceAtLeast(0L).
+ *    - It is NEVER applied on individual days before summing. DayCalculationResult.netPayout is provided
+ *      strictly for isolated single-day UI display and is NOT used when computing cumulative totals,
+ *      preventing distortion when a worker has negative daily balances (e.g. absent day with deductions).
+ * 7. Unified Financial Engine (مسیر محاسباتی یکپارچه):
+ *    - calculateFinancialSummary serves as the single calculation engine for DashboardAnalytics,
+ *      workerPerformances, and grand project totals.
+ *    - grandTotalProjectCost strictly equals the sum of netPayoutBeforeGroup across all workers.
+ *    - Deductions on absent days are treated identically in analytics, dailyBookkeeping, and workerPerformances.
+ * 8. Expenses (هزینه‌ها):
+ *    - GROUP expenses are divided equally among workers who worked at least one shift.
+ *    - INDIVIDUAL expenses are added/deducted strictly by workerId (never by workerName).
  */
 object WageCalculator {
 
@@ -35,59 +55,44 @@ object WageCalculator {
      * Standard rounding function used across all financial calculations.
      * Prevents truncation errors by rounding mathematically (half-up).
      */
-    fun roundToLong(value: Double): Long = kotlin.math.floor(value + 0.5).toLong()
+    fun roundToLong(value: Double): Long = floor(value + 0.5).toLong()
 
     /**
-     * Determines whether a worker is an hourly worker based on their profile or attendance record.
+     * Determines whether a worker is an hourly worker based on their attendance record status.
+     * Fallback to worker profile only if no attendance record exists.
      */
     fun isHourly(worker: WorkerEntity, att: AttendanceEntity?): Boolean {
         if (att != null) {
-            if (att.status == AttendanceStatus.HOURLY) return true
-            if (att.hourlyHours > 0 || (att.hourlyWageRate > 0 && att.dailyWage == 0L)) return true
-            if (att.notes == "ساعتی") return true
+            return att.status == AttendanceStatus.HOURLY
         }
         return worker.isHourlyEnabled
     }
 
     /**
      * Determines whether a worker is absent for a given attendance record.
-     * Rule: Absent if status is ABSENT or notes contain "غیبت".
-     * Daily workers with 0 regular hours and not marked half/full day note are also absent.
+     * Rule: Strictly determined by AttendanceEntity.status == ABSENT.
      */
     fun isAbsent(worker: WorkerEntity, att: AttendanceEntity?): Boolean {
         if (att == null) return false
-        if (att.status == AttendanceStatus.ABSENT) return true
-        if (att.notes == "غیبت" || att.notes.contains("غیبت")) return true
-        val hourly = isHourly(worker, att)
-        return if (hourly) {
-            // For an hourly worker, absent ONLY if explicitly marked as ABSENT
-            false
-        } else {
-            // For a daily worker, absent if regularHours == 0 and not marked half day or noted full day
-            att.regularHours == 0.0 &&
-                att.status != AttendanceStatus.HALF_DAY &&
-                !att.notes.contains("نصف روز") &&
-                !att.notes.contains("تمام روز")
-        }
+        return att.status == AttendanceStatus.ABSENT
     }
 
     /**
      * Determines whether a worker worked a half-day shift (نصف روز).
+     * Rule: Strictly determined by AttendanceEntity.status == HALF_DAY.
      */
     fun isHalfDay(worker: WorkerEntity, att: AttendanceEntity?): Boolean {
-        if (isHourly(worker, att)) return false
-        if (isAbsent(worker, att)) return false
-        return att != null && (att.status == AttendanceStatus.HALF_DAY || att.regularHours == 4.0 || att.notes == "نصف روز" || att.notes.contains("نصف روز"))
+        if (att == null) return false
+        return att.status == AttendanceStatus.HALF_DAY
     }
 
     /**
      * Determines whether a worker worked a full-day shift (تمام روز).
+     * Rule: Strictly determined by AttendanceEntity.status == FULL_DAY.
      */
     fun isFullDay(worker: WorkerEntity, att: AttendanceEntity?): Boolean {
-        if (isHourly(worker, att)) return false
-        if (isAbsent(worker, att)) return false
-        if (isHalfDay(worker, att)) return false
-        return att == null || att.status == AttendanceStatus.FULL_DAY || att.regularHours >= 8.0 || att.notes == "تمام روز" || att.notes.contains("تمام روز")
+        if (att == null) return !isHourly(worker, null)
+        return att.status == AttendanceStatus.FULL_DAY
     }
 
     /**
@@ -100,8 +105,8 @@ object WageCalculator {
     ): DayCalculationResult {
         if (isAbsent(worker, att)) {
             // Rule: Absent day (کارگر غایب):
-            // - دستمزد روزانه، دستمزد ساعتی، اضافه کاری و مزایا (کمک‌هزینه‌های افزایشی) شامل نمی‌شود (صفر).
-            // - فقط کسورات (کسر ایاب و ذهاب، مسکن، خوراک، درمان) شامل می‌شود.
+            // - دستمزد روزانه، دستمزد ساعتی، اضافه کاری و مزایا (افزایشی) صفر است.
+            // - کسورات (کسر ایاب و ذهاب، مسکن، خوراک، درمان) حتی در روز غیبت لحاظ می‌شود.
             val transitDeduction = if (worker.transitImpact == "DEDUCTION") worker.transitAllowance else 0L
             val foodDeduction = if (worker.foodImpact == "DEDUCTION") worker.foodAllowance else 0L
             val accomDeduction = if (worker.accommodationImpact == "DEDUCTION") worker.accommodationAllowance else 0L
@@ -143,18 +148,16 @@ object WageCalculator {
             else -> worker.baseDailyWage
         }
 
-        // 2. Hourly Pay
-        val hHours = if (att != null && att.hourlyHours > 0.0) att.hourlyHours
-                     else if (worker.hourlyHours > 0.0) worker.hourlyHours else 0.0
+        // 2. Hourly Pay (only uses att.hourlyHours; does NOT fallback to profile template)
+        val hHours = if (att != null) att.hourlyHours else 0.0
         val hRate = if (att != null && att.hourlyWageRate > 0L) att.hourlyWageRate
                     else if (att != null && att.hourlyWage > 0L) att.hourlyWage
                     else if (worker.hourlyWageRate > 0L) worker.hourlyWageRate
                     else worker.baseHourlyWage
         val hourlyPay = if (hourly && hHours > 0.0 && hRate > 0L) roundToLong(hHours * hRate.toDouble()) else 0L
 
-        // 3. Overtime Pay
-        // Rule: Overtime only calculated if worker is not absent and (if hourly) hours > 0
-        val otHours = if (att != null && att.overtimeHours > 0.0) att.overtimeHours else worker.overtimeHours
+        // 3. Overtime Pay (only uses att.overtimeHours; profile rate used as fallback)
+        val otHours = if (att != null) att.overtimeHours else 0.0
         val otRate = if (att != null && att.overtimeRate > 0L) att.overtimeRate
                      else if (worker.overtimeRate > 0L) worker.overtimeRate
                      else {
@@ -189,7 +192,7 @@ object WageCalculator {
         val totalAllowances = transitAllowance + foodAllowance + accomAllowance + medAllowance
         val totalDeductions = transitDeduction + foodDeduction + accomDeduction + medDeduction
 
-        // 6. Net Payout (Gross - Deductions, capped at 0)
+        // 6. Net Payout for single-day display only
         val gross = baseWage + hourlyPay + overtimePay + totalAllowances
         val net = (gross - totalDeductions).coerceAtLeast(0L)
 
@@ -225,12 +228,14 @@ object WageCalculator {
     ): Long = calculateDay(worker, att, overtimeMultiplier).netPayout
 
     /**
-     * Aggregates all attendance records for a single unique worker person into a [WorkerPerformance].
-     * Rule: Absent days are ignored for shift count, pay, and allowance accumulation.
+     * Aggregates all attendance records and individual expenses for a single worker into a [WorkerPerformance].
+     * Rule: Absent days are ignored for shifts, wages, and allowances, but deductions are accumulated.
+     * Rule: coerceAtLeast(0) is applied ONLY ONCE to the final cumulative total of the worker.
      */
     fun calculateWorkerPerformance(
         worker: WorkerEntity,
         attendances: List<AttendanceEntity>,
+        individualExpenses: List<ExpenseEntity> = emptyList(),
         groupExpenseShare: Long = 0L,
         overtimeMultiplier: Double = DEFAULT_OVERTIME_MULTIPLIER
     ): WorkerPerformance {
@@ -269,18 +274,31 @@ object WageCalculator {
                 medAllowanceTotal += res.medicalAllowance
             }
 
-            // کسورات (ایاب و ذهاب، مسکن، خوراک، درمان) حتی در صورت غیبت نیز کسر و محاسبه می‌شوند
+            // کسورات حتی در صورت غیبت نیز کسر و تجمیع می‌شوند
             transitDeductionTotal += res.transitDeduction
             foodDeductionTotal += res.foodDeduction
             accomDeductionTotal += res.accommodationDeduction
             medDeductionTotal += res.medicalDeduction
         }
 
+        // Add individual expenses for this worker (strictly based on workerId)
+        for (exp in individualExpenses) {
+            val isAllowance = exp.impactType.equals("ALLOWANCE", ignoreCase = true)
+            when (exp.category.uppercase()) {
+                "TRANSIT" -> if (isAllowance) transitAllowanceTotal += exp.amount else transitDeductionTotal += exp.amount
+                "FOOD" -> if (isAllowance) foodAllowanceTotal += exp.amount else foodDeductionTotal += exp.amount
+                "ACCOMMODATION" -> if (isAllowance) accomAllowanceTotal += exp.amount else accomDeductionTotal += exp.amount
+                "MEDICAL" -> if (isAllowance) medAllowanceTotal += exp.amount else medDeductionTotal += exp.amount
+                else -> if (isAllowance) transitAllowanceTotal += exp.amount else transitDeductionTotal += exp.amount
+            }
+        }
+
         val totalAllowances = transitAllowanceTotal + foodAllowanceTotal + accomAllowanceTotal + medAllowanceTotal
         val totalDeductions = transitDeductionTotal + foodDeductionTotal + accomDeductionTotal + medDeductionTotal
 
         val gross = baseWageTotal + hourlyPayTotal + otPayTotal + totalAllowances
-        val net = (gross - totalDeductions - groupExpenseShare).coerceAtLeast(0L)
+        val netBeforeGroup = (gross - totalDeductions).coerceAtLeast(0L)
+        val finalNet = (gross - totalDeductions - groupExpenseShare).coerceAtLeast(0L)
 
         return WorkerPerformance(
             worker = worker,
@@ -302,7 +320,159 @@ object WageCalculator {
             accommodationDeductionTotal = accomDeductionTotal,
             medicalDeductionTotal = medDeductionTotal,
             groupExpenseShare = groupExpenseShare,
-            netPayout = net
+            netPayoutBeforeGroup = netBeforeGroup,
+            netPayout = finalNet
+        )
+    }
+
+    /**
+     * Unified financial summary for all workers, attendances, and expenses in a workplace folder.
+     * Serves as the single calculation engine for analytics, workerPerformances, and grand project totals.
+     */
+    fun calculateFinancialSummary(
+        workers: List<WorkerEntity>,
+        attendances: List<AttendanceEntity>,
+        expenses: List<ExpenseEntity>,
+        todayStr: String = JalaliCalendar.todayString(),
+        overtimeMultiplier: Double = DEFAULT_OVERTIME_MULTIPLIER
+    ): FinancialSummary {
+        val groupExpenses = expenses.filter { it.scope.equals("GROUP", ignoreCase = true) }
+        val totalGroupExpenses = groupExpenses.sumOf { it.amount }
+
+        // Workers who worked at least 1 present shift
+        val workersWithShifts = workers.filter { worker ->
+            attendances.any { it.workerId == worker.id && it.status != AttendanceStatus.ABSENT }
+        }
+        val presentWorkerCount = workersWithShifts.size
+        val sharePerWorker = if (presentWorkerCount > 0) totalGroupExpenses / presentWorkerCount else 0L
+
+        val performances = workers.map { worker ->
+            val workerAtts = attendances.filter { it.workerId == worker.id }
+            val workerIndivExpenses = expenses.filter {
+                it.scope.equals("INDIVIDUAL", ignoreCase = true) && it.workerId == worker.id
+            }
+            calculateWorkerPerformance(
+                worker = worker,
+                attendances = workerAtts,
+                individualExpenses = workerIndivExpenses,
+                groupExpenseShare = if (worker in workersWithShifts) sharePerWorker else 0L,
+                overtimeMultiplier = overtimeMultiplier
+            )
+        }
+
+        val totalWorkDaysCount = performances.sumOf { it.totalShifts }
+        val totalWorkHours = performances.sumOf { it.regularHours + it.hourlyHours + it.overtimeHours }
+        val totalOvertimeHours = performances.sumOf { it.overtimeHours }
+        val totalBaseWagesPaid = performances.sumOf { it.baseWageTotal }
+        val totalHourlyPaid = performances.sumOf { it.hourlyPayTotal }
+        val totalOvertimePaid = performances.sumOf { it.overtimePayTotal }
+        val totalAllowances = performances.sumOf { it.totalAllowances }
+        val totalDeductions = performances.sumOf { it.totalDeductions }
+
+        // grandTotalProjectCost strictly equals sum of netPayoutBeforeGroup across all workers
+        val grandTotalProjectCost = performances.sumOf { it.netPayoutBeforeGroup }
+
+        val todayAttendanceCount = attendances.count { it.date == todayStr && it.status != AttendanceStatus.ABSENT }
+
+        val totalTransitExpenses = expenses.filter { it.category.equals("TRANSIT", ignoreCase = true) }.sumOf { it.amount }
+        val totalAccommodationExpenses = expenses.filter { it.category.equals("ACCOMMODATION", ignoreCase = true) }.sumOf { it.amount }
+        val totalAccommodationDays = expenses.filter { it.category.equals("ACCOMMODATION", ignoreCase = true) }.sumOf { it.accommodationDays }
+        val totalFoodExpenses = expenses.filter { it.category.equals("FOOD", ignoreCase = true) }.sumOf { it.amount }
+        val totalMedicalExpenses = expenses.filter { it.category.equals("MEDICAL", ignoreCase = true) }.sumOf { it.amount }
+        val totalOtherExpenses = expenses.filter { it.category.equals("OTHER", ignoreCase = true) }.sumOf { it.amount }
+        val totalIndividualExpenses = expenses.filter { it.scope.equals("INDIVIDUAL", ignoreCase = true) }.sumOf { it.amount }
+        val grandTotalExpenses = expenses.sumOf { it.amount }
+
+        return FinancialSummary(
+            workerPerformances = performances,
+            totalWorkDaysCount = totalWorkDaysCount,
+            totalWorkHours = totalWorkHours,
+            totalOvertimeHours = totalOvertimeHours,
+            totalBaseWagesPaid = totalBaseWagesPaid,
+            totalHourlyPaid = totalHourlyPaid,
+            totalOvertimePaid = totalOvertimePaid,
+            totalAllowances = totalAllowances,
+            totalDeductions = totalDeductions,
+            grandTotalProjectCost = grandTotalProjectCost,
+            todayAttendanceCount = todayAttendanceCount,
+            totalTransitExpenses = totalTransitExpenses,
+            totalAccommodationExpenses = totalAccommodationExpenses,
+            totalAccommodationDays = totalAccommodationDays,
+            totalFoodExpenses = totalFoodExpenses,
+            totalMedicalExpenses = totalMedicalExpenses,
+            totalOtherExpenses = totalOtherExpenses,
+            totalIndividualExpenses = totalIndividualExpenses,
+            totalGroupExpenses = totalGroupExpenses,
+            grandTotalExpenses = grandTotalExpenses
+        )
+    }
+
+    /**
+     * Unified daily bookkeeping calculation for a specific date.
+     * Uses the exact same rules as the overall project analytics.
+     */
+    fun calculateDailyBookkeeping(
+        dateStr: String,
+        workers: List<WorkerEntity>,
+        attendances: List<AttendanceEntity>,
+        expenses: List<ExpenseEntity>,
+        overtimeMultiplier: Double = DEFAULT_OVERTIME_MULTIPLIER
+    ): DailyBookkeeping {
+        val dayAtts = attendances.filter { it.date == dateStr }
+        val dayExps = expenses.filter { it.date == dateStr }
+
+        val workerMap = workers.associateBy { it.id }
+        var wages = 0L
+        var hourlyPay = 0L
+        var overtimePay = 0L
+        var allowances = 0L
+        var deductions = 0L
+        var hours = 0.0
+        var presentCount = 0
+
+        for (att in dayAtts) {
+            val worker = workerMap[att.workerId] ?: continue
+            val res = calculateDay(worker, att, overtimeMultiplier)
+            if (res.isWorkingDay) {
+                presentCount++
+                wages += res.baseWage
+                hourlyPay += res.hourlyPay
+                overtimePay += res.overtimePay
+                allowances += res.totalAllowances
+                hours += (res.regularHours + res.hourlyHours + res.overtimeHours)
+            }
+            // Deductions apply even when worker is absent
+            deductions += res.totalDeductions
+        }
+
+        // Add daily individual expenses
+        for (exp in dayExps.filter { it.scope.equals("INDIVIDUAL", ignoreCase = true) }) {
+            if (exp.impactType.equals("ALLOWANCE", ignoreCase = true)) {
+                allowances += exp.amount
+            } else {
+                deductions += exp.amount
+            }
+        }
+
+        val dailyExpenses = dayExps.sumOf { it.amount }
+        val grandDailyCost = (wages + hourlyPay + overtimePay + allowances - deductions).coerceAtLeast(0L)
+
+        return DailyBookkeeping(
+            date = dateStr,
+            dayOfWeek = JalaliCalendar.getDayOfWeek(dateStr),
+            grandDailyCost = grandDailyCost,
+            totalDailyWages = wages,
+            totalHourlyPay = hourlyPay,
+            totalOvertimePay = overtimePay,
+            dailyExpenses = dailyExpenses,
+            workersPresent = presentCount,
+            totalHours = hours,
+            transitCost = dayExps.filter { it.category.equals("TRANSIT", ignoreCase = true) }.sumOf { it.amount },
+            accommodationCost = dayExps.filter { it.category.equals("ACCOMMODATION", ignoreCase = true) }.sumOf { it.amount },
+            foodCost = dayExps.filter { it.category.equals("FOOD", ignoreCase = true) }.sumOf { it.amount },
+            medicalCost = dayExps.filter { it.category.equals("MEDICAL", ignoreCase = true) }.sumOf { it.amount },
+            attendances = dayAtts,
+            expenses = dayExps
         )
     }
 }
@@ -330,3 +500,54 @@ data class DayCalculationResult(
     val accommodationDeduction: Long = 0L,
     val medicalDeduction: Long = 0L
 )
+
+/**
+ * Aggregated financial summary across all workers and expenses in a project.
+ */
+data class FinancialSummary(
+    val workerPerformances: List<WorkerPerformance>,
+    val totalWorkDaysCount: Int,
+    val totalWorkHours: Double,
+    val totalOvertimeHours: Double,
+    val totalBaseWagesPaid: Long,
+    val totalHourlyPaid: Long,
+    val totalOvertimePaid: Long,
+    val totalAllowances: Long,
+    val totalDeductions: Long,
+    val grandTotalProjectCost: Long,
+    val todayAttendanceCount: Int,
+    val totalTransitExpenses: Long,
+    val totalAccommodationExpenses: Long,
+    val totalAccommodationDays: Int,
+    val totalFoodExpenses: Long,
+    val totalMedicalExpenses: Long,
+    val totalOtherExpenses: Long,
+    val totalIndividualExpenses: Long,
+    val totalGroupExpenses: Long,
+    val grandTotalExpenses: Long
+) {
+    companion object {
+        val EMPTY = FinancialSummary(
+            workerPerformances = emptyList(),
+            totalWorkDaysCount = 0,
+            totalWorkHours = 0.0,
+            totalOvertimeHours = 0.0,
+            totalBaseWagesPaid = 0L,
+            totalHourlyPaid = 0L,
+            totalOvertimePaid = 0L,
+            totalAllowances = 0L,
+            totalDeductions = 0L,
+            grandTotalProjectCost = 0L,
+            todayAttendanceCount = 0,
+            totalTransitExpenses = 0L,
+            totalAccommodationExpenses = 0L,
+            totalAccommodationDays = 0,
+            totalFoodExpenses = 0L,
+            totalMedicalExpenses = 0L,
+            totalOtherExpenses = 0L,
+            totalIndividualExpenses = 0L,
+            totalGroupExpenses = 0L,
+            grandTotalExpenses = 0L
+        )
+    }
+}

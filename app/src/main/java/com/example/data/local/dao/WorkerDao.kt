@@ -2,10 +2,9 @@ package com.example.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Upsert
 import com.example.data.local.entity.WorkerEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -26,7 +25,7 @@ interface WorkerDao {
     @Query("SELECT * FROM workers WHERE folderId = :folderId AND isActive = 1 ORDER BY name ASC")
     fun getActiveWorkersByFolder(folderId: Long): Flow<List<WorkerEntity>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun insertWorker(worker: WorkerEntity): Long
 
     @Update

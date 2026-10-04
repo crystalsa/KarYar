@@ -138,6 +138,7 @@ fun WorkersScreen(
 
     var editingWorker by remember { mutableStateOf<WorkerEntity?>(null) }
     var viewingWorker by remember { mutableStateOf<WorkerEntity?>(null) }
+    var viewingAttendance by remember { mutableStateOf<AttendanceEntity?>(null) }
     var deletingWorker by remember { mutableStateOf<WorkerEntity?>(null) }
 
     var statusFilter by remember { mutableStateOf("همه") }
@@ -747,7 +748,10 @@ fun WorkersScreen(
                     performance = perf,
                     targetDate = cardTargetDate,
                     targetDayOfWeek = cardTargetDayOfWeek,
-                    onClick = { viewingWorker = worker },
+                    onClick = {
+                        viewingWorker = worker
+                        viewingAttendance = att
+                    },
                     onEdit = { editingWorker = worker },
                     onDelete = { deletingWorker = worker }
                 )
@@ -898,22 +902,26 @@ fun WorkersScreen(
     // Dialog: View Worker Details
     if (viewingWorker != null) {
         val perf = performances.find { it.worker.id == viewingWorker?.id }
-        val targetDate = selectedDateFolder?.date
-        val att = targetDate?.let { d ->
+        val currentAtt = viewingAttendance ?: (targetDayFolder?.date ?: selectedDateFolder?.date)?.let { d ->
             attendanceList.firstOrNull { it.workerId == viewingWorker?.id && it.date == d }
         }
         WorkerDetailDialog(
             worker = viewingWorker!!,
-            attendance = att,
+            attendance = currentAtt,
             performance = perf,
-            onDismiss = { viewingWorker = null },
+            onDismiss = {
+                viewingWorker = null
+                viewingAttendance = null
+            },
             onEdit = {
                 editingWorker = viewingWorker
                 viewingWorker = null
+                viewingAttendance = null
             },
             onDelete = {
                 deletingWorker = viewingWorker
                 viewingWorker = null
+                viewingAttendance = null
             }
         )
     }
@@ -1202,8 +1210,13 @@ private fun WorkerItemCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
+                        val roleDisplay = if (worker.nationalId.length >= 4) {
+                            "${worker.role} • کد: ${Formatters.toPersianDigits(worker.nationalId.takeLast(4))}"
+                        } else {
+                            worker.role
+                        }
                         Text(
-                            text = worker.role,
+                            text = roleDisplay,
                             fontSize = 11.sp,
                             color = AmberAccent,
                             fontWeight = FontWeight.Medium,

@@ -25,6 +25,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -195,6 +196,8 @@ fun WorkerDetailDialog(
                         val isHalfDay = WageCalculator.isHalfDay(worker, attendance)
                         val isFullDay = WageCalculator.isFullDay(worker, attendance)
 
+                        val dayCalc = WageCalculator.calculateDay(worker, attendance)
+
                         if (attendance != null) {
                             val attStatusText = when {
                                 isAbsent -> "غیبت"
@@ -226,97 +229,68 @@ fun WorkerDetailDialog(
                             val hRate = if (attendance != null && attendance.hourlyWageRate > 0) attendance.hourlyWageRate
                                         else if (attendance != null && attendance.hourlyWage > 0) attendance.hourlyWage
                                         else if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage
-                            val hHours = if (attendance != null && attendance.hourlyHours > 0) attendance.hourlyHours
-                                         else if (worker.hourlyHours > 0) worker.hourlyHours else 0.0
-                            val totalHPay = (hHours * hRate).toLong()
                             CompactDetailRow(
                                 label = "دستمزد ساعتی:",
-                                value = if (hHours > 0) {
-                                    "${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(totalHPay)}"
+                                value = if (dayCalc.hourlyHours > 0) {
+                                    "${Formatters.toPersianDigits(dayCalc.hourlyHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(dayCalc.hourlyPay)}"
                                 } else {
                                     "(هر ساعت ${Formatters.formatCurrency(hRate)}) = ۰ تومان"
                                 },
                                 valueColor = CyanAccent
                             )
                         } else if (isHalfDay) {
-                            val halfWage = if (attendance?.dailyWage != null && attendance.dailyWage > 0) attendance.dailyWage else WageCalculator.roundToLong(worker.baseDailyWage / 2.0)
                             CompactDetailRow(
                                 label = "دستمزد روزانه (نصف روز):",
-                                value = Formatters.formatCurrency(halfWage),
+                                value = Formatters.formatCurrency(dayCalc.baseWage),
                                 valueColor = AmberAccent
                             )
-                        } else if (worker.baseDailyWage > 0 || (attendance?.dailyWage ?: 0L) > 0L) {
-                            val wageToDisplay = if (attendance != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage
-                            CompactDetailRow("دستمزد روزانه:", Formatters.formatCurrency(wageToDisplay))
+                        } else if (dayCalc.baseWage > 0L) {
+                            CompactDetailRow("دستمزد روزانه:", Formatters.formatCurrency(dayCalc.baseWage))
                         }
 
-                        if (!isAbsent) {
-                            val otHours = if (attendance != null && attendance.overtimeHours > 0) attendance.overtimeHours else worker.overtimeHours
+                        if (!isAbsent && dayCalc.overtimeHours > 0.0) {
                             val otRate = if (attendance != null && attendance.overtimeRate > 0) attendance.overtimeRate else worker.overtimeRate
-                            val otPay = (otHours * otRate).toLong()
-                            if (otHours > 0) {
-                                CompactDetailRow(
-                                    "اضافه کاری:",
-                                    "${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otPay)}",
-                                    valueColor = AmberAccent
-                                )
-                            }
+                            CompactDetailRow(
+                                "اضافه کاری:",
+                                "${Formatters.toPersianDigits(dayCalc.overtimeHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(dayCalc.overtimePay)}",
+                                valueColor = AmberAccent
+                            )
                         }
 
-                        if (performance != null) {
-                            Spacer(modifier = Modifier.height(4.dp))
+                        if (!isAbsent && dayCalc.totalAllowances > 0) {
+                            CompactDetailRow(
+                                label = "(+) کمک‌هزینه‌های روزانه:",
+                                value = "+${Formatters.formatCurrency(dayCalc.totalAllowances)}",
+                                valueColor = EmeraldAccent
+                            )
+                        }
 
-                            if (performance.hourlyPayTotal > 0) {
-                                CompactDetailRow(
-                                    label = "مجموع کارکرد ساعتی:",
-                                    value = "${Formatters.toPersianDigits(performance.hourlyHours)} ساعت (${Formatters.formatCurrency(performance.hourlyPayTotal)})",
-                                    valueColor = CyanAccent
-                                )
-                            }
+                        if (dayCalc.totalDeductions > 0) {
+                            CompactDetailRow(
+                                label = "(-) کسورات روزانه:",
+                                value = "-${Formatters.formatCurrency(dayCalc.totalDeductions)}",
+                                valueColor = RoseAccent
+                            )
+                        }
 
-                            if (performance.overtimePayTotal > 0) {
-                                CompactDetailRow(
-                                    label = "مجموع اضافه کاری:",
-                                    value = "${Formatters.toPersianDigits(performance.overtimeHours)} ساعت (${Formatters.formatCurrency(performance.overtimePayTotal)})",
-                                    valueColor = AmberAccent
-                                )
-                            }
-
-                            if (performance.totalAllowances > 0) {
-                                CompactDetailRow(
-                                    label = "(+) مجموع کمک‌هزینه‌ها:",
-                                    value = "+${Formatters.formatCurrency(performance.totalAllowances)}",
-                                    valueColor = EmeraldAccent
-                                )
-                            }
-
-                            if (performance.totalDeductions > 0) {
-                                CompactDetailRow(
-                                    label = "(-) مجموع کسورات هزینه‌ها:",
-                                    value = "-${Formatters.formatCurrency(performance.totalDeductions)}",
-                                    valueColor = RoseAccent
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "خالص دریافتی نهایی:",
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = Formatters.formatCurrency(performance.netPayout),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp,
-                                    color = EmeraldAccent
-                                )
-                            }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "مبلغ پرداختی نهایی:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isAbsent) "۰ تومان (غیبت)" else Formatters.formatCurrency(dayCalc.netPayout),
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 13.5.sp,
+                                color = if (isAbsent) RoseAccent else EmeraldAccent
+                            )
                         }
                     }
                 }
