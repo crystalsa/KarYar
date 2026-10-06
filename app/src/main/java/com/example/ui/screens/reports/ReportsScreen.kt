@@ -73,6 +73,7 @@ fun ReportsScreen(
     val analytics by viewModel.analytics.collectAsState()
     val workers by viewModel.workers.collectAsState()
     val attendanceList by viewModel.attendanceList.collectAsState()
+    val expenses by viewModel.expenses.collectAsState()
 
     val activeProject = folder?.name ?: "پروژه کارگاهی"
     val activeEmployer = folder?.employerName ?: "کارفرما"
@@ -125,7 +126,7 @@ fun ReportsScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Export Action Buttons (PDF & Excel)
+                    // Export Action Buttons (PDF & CSV)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -141,7 +142,8 @@ fun ReportsScreen(
                                             employerName = activeEmployer,
                                             foremanName = activeForeman,
                                             analytics = analytics,
-                                            performances = performances
+                                            performances = performances,
+                                            expenses = expenses
                                         )
                                         withContext(Dispatchers.Main) {
                                             Toast.makeText(context, "فایل PDF با موفقیت آماده شد", Toast.LENGTH_SHORT).show()
@@ -166,7 +168,7 @@ fun ReportsScreen(
                             Text("خروجی PDF", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
 
-                        // Excel / CSV Export Button
+                        // CSV Export Button
                         Button(
                             onClick = {
                                 scope.launch(Dispatchers.IO) {
@@ -176,15 +178,17 @@ fun ReportsScreen(
                                             workers = workers,
                                             attendanceList = attendanceList,
                                             performances = performances,
-                                            projectName = activeProject
+                                            projectName = activeProject,
+                                            expenses = expenses,
+                                            analytics = analytics
                                         )
                                         withContext(Dispatchers.Main) {
-                                            Toast.makeText(context, "فایل اکسل با موفقیت ذخیره شد", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "فایل CSV با موفقیت ذخیره شد", Toast.LENGTH_SHORT).show()
                                             ExcelExportUtil.shareFile(context, file, "text/csv", "ارسال گزارش اکسل (CSV)")
                                         }
                                     } catch (e: Exception) {
                                         withContext(Dispatchers.Main) {
-                                            Toast.makeText(context, "خطا در صدور اکسل: ${e.message}", Toast.LENGTH_LONG).show()
+                                            Toast.makeText(context, "خطا در صدور CSV: ${e.message}", Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 }
@@ -198,7 +202,7 @@ fun ReportsScreen(
                         ) {
                             Icon(Icons.Default.TableChart, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("خروجی اکسل", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text("خروجی CSV", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
                 }

@@ -107,6 +107,15 @@ enum class MainTab(val title: String, val icon: ImageVector, val tag: String) {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Clean up old export files from cache/exports on app startup
+        try {
+            val exportDir = java.io.File(cacheDir, "exports")
+            if (exportDir.exists()) {
+                exportDir.listFiles()?.forEach { it.delete() }
+            }
+        } catch (_: Exception) {}
+
         enableEdgeToEdge()
         setContent {
             // Strictly Light Theme as requested by user: "از تم دارک استفاده نکن تم باید روشن باشه"
@@ -549,7 +558,3 @@ fun WorkerManagementApp(
     }
 }
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(text = "Hello $name!", modifier = modifier)
-}

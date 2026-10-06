@@ -4,7 +4,10 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import com.example.data.local.entity.AttendanceEntity
+import com.example.data.local.entity.AttendanceStatus
+import com.example.data.local.entity.ExpenseEntity
 import com.example.data.local.entity.WorkerEntity
+import com.example.domain.model.DashboardAnalytics
 import com.example.domain.model.WorkerPerformance
 import java.io.File
 import java.io.FileOutputStream
@@ -14,66 +17,143 @@ import java.nio.charset.StandardCharsets
 object ExcelExportUtil {
 
     /**
-     * Exports full project records to an Excel-compatible CSV file with UTF-8 BOM
+     * Helper to safely escape CSV fields according to RFC 4180 and prevent CSV injection.
+     */
+    fun escapeCsv(value: Any?): String {
+        if (value == null) return "\"\""
+        var str = value.toString().trim()
+        // Prevent CSV Formula Injection (=, +, -, @, \t, \r)
+        if (str.startsWith("=") || str.startsWith("+") || str.startsWith("-") || str.startsWith("@")) {
+            str = "'$str"
+        }
+        val escaped = str.replace("\"", "\"\"")
+        return "\"$escaped\""
+    }
+
+    /**
+     * Exports full project records to a properly formatted, injection-safe CSV file with UTF-8 BOM.
+     * Compatible with Microsoft Excel, LibreOffice Calc, and Google Sheets.
      */
     fun exportToExcelCsv(
         context: Context,
         workers: List<WorkerEntity>,
         attendanceList: List<AttendanceEntity>,
         performances: List<WorkerPerformance>,
-        projectName: String = "پروژه کارگاهی"
+        projectName: String = "پروژه کارگاهی",
+        expenses: List<ExpenseEntity> = emptyList(),
+        analytics: DashboardAnalytics? = null
     ): File {
         val fileName = "گزارش_کارگران_${System.currentTimeMillis()}.csv"
         val cacheDir = File(context.cacheDir, "exports").apply { mkdirs() }
         val file = File(cacheDir, fileName)
 
         FileOutputStream(file).use { fos ->
-            // Write UTF-8 BOM so Microsoft Excel opens Persian characters cleanly
+            // Write UTF-8 BOM (0xEF, 0xBB, 0xBF) so Excel correctly recognizes Persian characters
             fos.write(0xEF)
             fos.write(0xBB)
             fos.write(0xBF)
 
             OutputStreamWriter(fos, StandardCharsets.UTF_8).use { writer ->
-                // Title
-                writer.append("سامانه مدیریت جامع کارگران - $projectName\n")
-                writer.append("تاریخ خروجی,${JalaliCalendar.todayString()}\n\n")
+                // Header & Title
+                writer.append("سامانه مدیریت جامع کارگران\n")
+                writer.append("پروژه,${escapeCsv(projectName)}\n")
+                writer.append("تاریخ صدور خروجی,${escapeCsv(JalaliCalendar.todayString())}\n\n")
 
-                // Section 1: Performance Summary
-                writer.append("=== خلاصه کارکرد و تسویه حساب کارگران ===\n")
-                writer.append("شناسه,نام کارگر,شغل / تخصص,تعداد روز,ساعات عادی,اضافه کاری (ساعت),دستمزد پایه (تومان),اضافه کاری (تومان),مزایا (تومان),کسورات (تومان),خالص دریافتی (تومان)\n")
+                // -------------------------------------------------------------
+                // Section 1: Performance Summary (تسویه حساب و کارکرد پرسنل)
+                // -------------------------------------------------------------
+                writer.append("=== خلاصه کارکرد و تسویه حساب هر کارگر ===\n")
+                writer.append("شناسه کارگر,نام کارگر,شغل / تخصص,تعداد شیفت (روز),ساعات عادی,ساعت کار ساعتی,اضافه کاری (ساعت),دستمزد پایه (تومان),دستمزد ساعتی (تومان),اضافه کاری (تومان),کمک‌هزینه‌ها (تومان),کسورات (تومان),سهم هزینه‌های گروهی (تومان),خالص دریافتی نهایی (تومان)\n")
+
                 for (p in performances) {
                     writer.append("${p.worker.id},")
-                    writer.append("\"${p.worker.name}\",")
-                    writer.append("\"${p.worker.role}\",")
+                    writer.append("${escapeCsv(p.worker.name)},")
+                    writer.append("${escapeCsv(p.worker.role)},")
                     writer.append("${p.totalShifts},")
                     writer.append("${p.regularHours},")
+                    writer.append("${p.hourlyHours},")
                     writer.append("${p.overtimeHours},")
                     writer.append("${p.baseWageTotal},")
+                    writer.append("${p.hourlyPayTotal},")
                     writer.append("${p.overtimePayTotal},")
                     writer.append("${p.totalAllowances},")
                     writer.append("${p.totalDeductions},")
+                    writer.append("${p.groupExpenseShare},")
                     writer.append("${p.netPayout}\n")
                 }
                 writer.append("\n")
 
-                // Section 2: Attendance Logs
-                writer.append("=== گزارش ثبت ورود و خروج و روزهای کاری ===\n")
-                writer.append("تاریخ,نام کارگر,ساعت ورود,ساعت خروج,ساعت عادی,اضافه کاری (ساعت),دستمزد روزانه,دستمزد ساعتی,محل کار,کارفرما,سرکارگر,توضیحات\n")
+                // -------------------------------------------------------------
+                // Section 2: Attendance Logs (ثبت تردد روزانه)
+                // -------------------------------------------------------------
+                writer.append("=== گزارش ثبت ورود و خروج و وضعیت روزهای کاری ===\n")
+                writer.append("تاریخ,شناسه کارگر,نام کارگر,وضعیت حضور,ساعت ورود,ساعت خروج,ساعات عادی,ساعت کار ساعتی,ساعات اضافه کار,دستمزد روزانه (تومان),دستمزد ساعتی (تومان),محل کار,کارفرما,سرکارگر,توضیحات\n")
+
+                // Rule: Worker identity is strictly worker.id
                 val workerMap = workers.associateBy { it.id }
+
                 for (att in attendanceList) {
-                    val wName = workerMap[att.workerId]?.name ?: "کارگر #${att.workerId}"
-                    writer.append("${att.date},")
-                    writer.append("\"$wName\",")
-                    writer.append("${att.entryTime},")
-                    writer.append("${att.exitTime},")
+                    val w = workerMap[att.workerId]
+                    val wName = w?.name ?: "کارگر #${att.workerId}"
+                    val statusStr = when (att.status) {
+                        AttendanceStatus.FULL_DAY -> "تمام روز"
+                        AttendanceStatus.HALF_DAY -> "نصف روز"
+                        AttendanceStatus.HOURLY -> "ساعتی"
+                        AttendanceStatus.ABSENT -> "غایب"
+                    }
+
+                    writer.append("${escapeCsv(att.date)},")
+                    writer.append("${att.workerId},")
+                    writer.append("${escapeCsv(wName)},")
+                    writer.append("${escapeCsv(statusStr)},")
+                    writer.append("${escapeCsv(att.entryTime)},")
+                    writer.append("${escapeCsv(att.exitTime)},")
                     writer.append("${att.regularHours},")
+                    writer.append("${att.hourlyHours},")
                     writer.append("${att.overtimeHours},")
                     writer.append("${att.dailyWage},")
                     writer.append("${att.hourlyWage},")
-                    writer.append("\"${att.workplaceName}\",")
-                    writer.append("\"${att.employerName}\",")
-                    writer.append("\"${att.foremanName}\",")
-                    writer.append("\"${att.notes}\"\n")
+                    writer.append("${escapeCsv(att.workplaceName)},")
+                    writer.append("${escapeCsv(att.employerName)},")
+                    writer.append("${escapeCsv(att.foremanName)},")
+                    writer.append("${escapeCsv(att.notes)}\n")
+                }
+                writer.append("\n")
+
+                // -------------------------------------------------------------
+                // Section 3: Expenses (هزینه‌های ثبت‌شده پروژه)
+                // -------------------------------------------------------------
+                if (expenses.isNotEmpty()) {
+                    writer.append("=== صورت هزینه‌های کارگاه و پروژه ===\n")
+                    writer.append("تاریخ,عنوان هزینه,دسته‌بندی,نوع تسهیم,کارگر منتسب,مبلغ (تومان),توضیحات\n")
+                    for (exp in expenses) {
+                        val scopeStr = if (exp.scope == "GROUP") "سهم گروهی (تقسیم بین کل کارگران)" else "اختصاصی فرد"
+                        val assignedWorker = exp.workerName ?: "-"
+                        writer.append("${escapeCsv(exp.date)},")
+                        writer.append("${escapeCsv(exp.title)},")
+                        writer.append("${escapeCsv(exp.category)},")
+                        writer.append("${escapeCsv(scopeStr)},")
+                        writer.append("${escapeCsv(assignedWorker)},")
+                        writer.append("${exp.amount},")
+                        writer.append("${escapeCsv(exp.notes)}\n")
+                    }
+                    writer.append("\n")
+                }
+
+                // -------------------------------------------------------------
+                // Section 4: Analytics Totals (تطابق کامل با داشبورد مالی)
+                // -------------------------------------------------------------
+                if (analytics != null) {
+                    writer.append("=== خلاصه آمار و تعهدات کل کارگاه ===\n")
+                    writer.append("شاخص,مقدار\n")
+                    writer.append("تعداد پرسنل فعال,${analytics.activeWorkersCount}\n")
+                    writer.append("مجموع روزهای کاری ثبت‌شده,${analytics.totalWorkDaysCount}\n")
+                    writer.append("مجموع ساعات کارکرد عادی,${analytics.totalWorkHours}\n")
+                    writer.append("مجموع ساعات اضافه کاری,${analytics.totalOvertimeHours}\n")
+                    writer.append("مجموع دستمزد پایه پرداخت‌شده (تومان),${analytics.totalWagesPaid}\n")
+                    writer.append("مجموع اضافه کاری و ساعتی (تومان),${analytics.totalOvertimePaid + analytics.totalHourlyPaid}\n")
+                    writer.append("کل هزینه‌های جانبی کارگاه (تومان),${analytics.grandTotalExpenses}\n")
+                    writer.append("مجموع کل مخارج و هزینه‌های پروژه (تومان),${analytics.grandTotalProjectCost}\n")
                 }
 
                 writer.flush()

@@ -24,6 +24,14 @@ class WorkerRepository(
     private val attendanceDao: AttendanceDao,
     private val expenseDao: ExpenseDao
 ) {
+    constructor(database: AppDatabase) : this(
+        database = database,
+        folderDao = database.folderDao(),
+        dateFolderDao = database.dateFolderDao(),
+        workerDao = database.workerDao(),
+        attendanceDao = database.attendanceDao(),
+        expenseDao = database.expenseDao()
+    )
     val allFolders: Flow<List<WorkplaceFolderEntity>> = folderDao.getAllFolders()
 
     fun getDateFoldersByFolder(folderId: Long): Flow<List<DateFolderEntity>> = dateFolderDao.getDateFoldersByFolder(folderId)
@@ -184,7 +192,7 @@ class WorkerRepository(
     suspend fun updateWorker(worker: WorkerEntity) = workerDao.updateWorker(worker)
     suspend fun deleteWorker(worker: WorkerEntity) = workerDao.deleteWorker(worker)
 
-    suspend fun insertAttendance(attendance: AttendanceEntity): Long = attendanceDao.insertAttendance(attendance)
+    suspend fun insertAttendance(attendance: AttendanceEntity): Long = attendanceDao.upsertAttendance(attendance)
     suspend fun updateAttendance(attendance: AttendanceEntity) = attendanceDao.updateAttendance(attendance)
     suspend fun deleteAttendance(attendance: AttendanceEntity) = attendanceDao.deleteAttendance(attendance)
 
@@ -381,7 +389,7 @@ class WorkerRepository(
         // ==========================================
         // ATTENDANCE RECORDS FOR DAY 1: روز کاری قبل (yesterdayJalali) - ۵ نفر
         // ==========================================
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w1Id,
@@ -399,11 +407,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w2Id,
@@ -422,11 +430,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "ساعتی"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w3Id,
@@ -438,18 +446,18 @@ class WorkerRepository(
                 regularHours = 8.0,
                 hourlyHours = 0.0,
                 hourlyWageRate = 0L,
-                overtimeHours = 2.0,
+                overtimeHours = 2.5,
                 overtimeRate = 120000L,
                 dailyWage = 800000L,
                 hourlyWage = 0L,
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w4Id,
@@ -468,11 +476,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "ساعتی"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w5Id,
@@ -490,14 +498,14 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 
         // ==========================================
         // ATTENDANCE RECORDS FOR DAY 2: روز کاری جاری (todayJalali) - ۵ نفر
         // ==========================================
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w1Id,
@@ -515,11 +523,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w2Id,
@@ -538,11 +546,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "ساعتی"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w3Id,
@@ -561,11 +569,11 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w4Id,
@@ -584,18 +592,18 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "ساعتی"
+                notes = ""
             )
         )
 
-        attendanceDao.insertAttendance(
+        attendanceDao.upsertAttendance(
             AttendanceEntity(
                 folderId = folder1Id,
                 workerId = w5Id,
                 dateFolderId = df1Today,
                 date = todayJalali,
-                entryTime = "08:30",
-                exitTime = "17:30",
+                entryTime = "08:15",
+                exitTime = "17:15",
                 regularHours = 8.0,
                 hourlyHours = 0.0,
                 hourlyWageRate = 0L,
@@ -606,7 +614,7 @@ class WorkerRepository(
                 workplaceName = "پروژه برج سپهر",
                 employerName = "مهندس سعیدی",
                 foremanName = "حاج اصغر کریمی",
-                notes = "تمام روز"
+                notes = ""
             )
         )
 

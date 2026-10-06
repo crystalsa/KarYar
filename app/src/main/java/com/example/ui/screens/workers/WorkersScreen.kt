@@ -1300,38 +1300,23 @@ private fun WorkerItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    val isHourly = worker.isHourlyEnabled ||
-                                   ((attendance?.hourlyWageRate ?: 0L) > 0L && (attendance?.dailyWage ?: 0L) == 0L)
+                    val dayCalc = WageCalculator.calculateDay(worker, attendance)
+                    val hRate = if (attendance != null && attendance.hourlyWageRate > 0) attendance.hourlyWageRate
+                                else if (attendance != null && attendance.hourlyWage > 0) attendance.hourlyWage
+                                else if (worker.hourlyWageRate > 0) worker.hourlyWageRate
+                                else worker.baseHourlyWage
 
-                    // محاسبه دقیق مبلغ پرداختی نهایی ابتدا انجام می‌شود تا در بالای دستمزدها قرار گیرد
-                    val dailyWage = if (isHourly) 0L else when {
-                        isAbsent -> 0L
-                        isHalfDay -> if (attendance?.dailyWage != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage / 2
-                        isFullDay -> if (attendance != null && attendance.dailyWage > 0) attendance.dailyWage else worker.baseDailyWage
-                        attendance != null && attendance.dailyWage > 0 -> attendance.dailyWage
-                        else -> worker.baseDailyWage
-                    }
-                    val hHours = if (attendance != null && attendance.hourlyHours > 0) attendance.hourlyHours else (if (worker.hourlyHours > 0) worker.hourlyHours else 0.0)
-                    val hRate = if (attendance != null && attendance.hourlyWageRate > 0) attendance.hourlyWageRate else (if (attendance != null && attendance.hourlyWage > 0) attendance.hourlyWage else (if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage))
-                    val hourlyPay = if (isHourly && !isAbsent && hHours > 0) (hHours * hRate).toLong() else 0L
+                    val otRate = if (attendance != null && attendance.overtimeRate > 0) attendance.overtimeRate
+                                 else worker.overtimeRate
 
-                    val otHours = if (attendance != null && attendance.overtimeHours > 0) attendance.overtimeHours else worker.overtimeHours
-                    val otRate = if (attendance != null && attendance.overtimeRate > 0) attendance.overtimeRate else worker.overtimeRate
-                    val overtimePay = if (!isAbsent && otHours > 0) (otHours * otRate).toLong() else 0L
+                    val netDayPayout = dayCalc.netPayout
 
-                    val transitVal = if (!isAbsent) (if (worker.transitImpact == "ALLOWANCE") worker.transitAllowance else -worker.transitAllowance) else 0L
-                    val accomVal = if (worker.accommodationImpact == "ALLOWANCE") worker.accommodationAllowance else -worker.accommodationAllowance
-                    val foodVal = if (!isAbsent) (if (worker.foodImpact == "ALLOWANCE") worker.foodAllowance else -worker.foodAllowance) else 0L
-                    val medVal = if (worker.medicalImpact == "ALLOWANCE") worker.medicalAllowance else -worker.medicalAllowance
-
-                    val netDayPayout = WageCalculator.calculateDayPayout(worker, attendance)
-
-                    // ۱. مبلغ پرداختی نهایی در بالای دستمزدها با قرارگیری عدد درست جلوش بدون فاصله
+                    // ۱. مبلغ پرداختی این روز در بالای دستمزدها با قرارگیری عدد درست جلوش بدون فاصله
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "مبلغ پرداختی نهایی: ",
+                            text = "مبلغ پرداختی این روز: ",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = if (isAbsent) RoseAccent else EmeraldAccent
@@ -1346,7 +1331,7 @@ private fun WorkerItemCard(
 
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // ۲. ریز دستمزدها و اضافه کار زیر مبلغ پرداختی نهایی
+                    // ۲. ریز دستمزدها و اضافه کار زیر مبلغ پرداختی این روز
                     if (isAbsent) {
                         // در صورت غیبت: مبلغی ثبت نمی‌شود و کلمه غیبت با رنگ قرمز به جای مبلغ نوشته می‌شود
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1364,10 +1349,9 @@ private fun WorkerItemCard(
                             )
                         }
                     } else if (isHourly) {
-                        val hourlyTotal = (hHours * hRate).toLong()
                         Text(
-                            text = if (hHours > 0) {
-                                "دستمزد ساعتی: ${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(hourlyTotal)}"
+                            text = if (dayCalc.hourlyHours > 0) {
+                                "دستمزد ساعتی: ${Formatters.toPersianDigits(dayCalc.hourlyHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(hRate)}) = ${Formatters.formatCurrency(dayCalc.hourlyPay)}"
                             } else {
                                 "دستمزد ساعتی: (هر ساعت ${Formatters.formatCurrency(hRate)}) = ۰ تومان"
                             },
@@ -1377,14 +1361,14 @@ private fun WorkerItemCard(
                         )
                     } else if (isHalfDay) {
                         Text(
-                            text = "دستمزد روزانه (نصف روز): ${Formatters.formatCurrency(dailyWage)}",
+                            text = "دستمزد روزانه (نصف روز): ${Formatters.formatCurrency(dayCalc.baseWage)}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = AmberAccent
                         )
                     } else if (isFullDay) {
                         Text(
-                            text = "دستمزد روزانه: ${Formatters.formatCurrency(dailyWage)}",
+                            text = "دستمزد روزانه: ${Formatters.formatCurrency(dayCalc.baseWage)}",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1398,10 +1382,9 @@ private fun WorkerItemCard(
                         )
                     }
 
-                    if (!isAbsent && otHours > 0) {
-                        val otTotal = (otHours * otRate).toLong()
+                    if (!isAbsent && dayCalc.overtimeHours > 0) {
                         Text(
-                            text = "اضافه کار: ${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(otTotal)}",
+                            text = "اضافه کار: ${Formatters.toPersianDigits(dayCalc.overtimeHours.toString().removeSuffix(".0"))} ساعت (هر ساعت ${Formatters.formatCurrency(otRate)}) = ${Formatters.formatCurrency(dayCalc.overtimePay)}",
                             fontSize = 10.5.sp,
                             color = AmberAccent
                         )

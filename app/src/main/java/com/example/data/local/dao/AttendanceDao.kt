@@ -2,9 +2,11 @@ package com.example.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
-import androidx.room.Upsert
 import com.example.data.local.entity.AttendanceEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -34,11 +36,23 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance WHERE folderId = :folderId AND epochDay BETWEEN :startEpoch AND :endEpoch ORDER BY epochDay ASC")
     fun getAttendanceBetweenEpochDays(folderId: Long, startEpoch: Long, endEpoch: Long): Flow<List<AttendanceEntity>>
 
-    @Upsert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAttendance(attendance: AttendanceEntity): Long
 
     @Update
     suspend fun updateAttendance(attendance: AttendanceEntity)
+
+    @Transaction
+    suspend fun upsertAttendance(attendance: AttendanceEntity): Long {
+        val existing = getAttendanceForWorkerAndDate(attendance.workerId, attendance.date)
+        return if (existing != null) {
+            val updated = attendance.copy(id = existing.id)
+            updateAttendance(updated)
+            existing.id
+        } else {
+            insertAttendance(attendance)
+        }
+    }
 
     @Delete
     suspend fun deleteAttendance(attendance: AttendanceEntity)

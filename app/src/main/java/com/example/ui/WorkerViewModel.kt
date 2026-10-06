@@ -422,34 +422,6 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
     fun updateWorker(worker: WorkerEntity) {
         viewModelScope.launch {
             repository.updateWorker(worker)
-            // Synchronize existing attendance records for this worker with updated rates
-            val atts = attendanceList.value.filter { it.workerId == worker.id }
-            for (att in atts) {
-                val updatedAtt = if (worker.isHourlyEnabled) {
-                    att.copy(
-                        dailyWage = 0L,
-                        regularHours = 0.0,
-                        hourlyWage = if (worker.hourlyWageRate > 0) worker.hourlyWageRate else worker.baseHourlyWage,
-                        hourlyWageRate = worker.hourlyWageRate,
-                        hourlyHours = if (att.hourlyHours > 0) att.hourlyHours else (if (worker.hourlyHours > 0) worker.hourlyHours else 8.0),
-                        overtimeHours = worker.overtimeHours,
-                        overtimeRate = worker.overtimeRate,
-                        notes = if (att.notes == "غیبت") "غیبت" else "ساعتی"
-                    )
-                } else {
-                    att.copy(
-                        dailyWage = if (att.notes == "نصف روز") worker.baseDailyWage / 2 else if (att.notes == "غیبت") 0L else worker.baseDailyWage,
-                        regularHours = if (att.notes == "نصف روز") 4.0 else if (att.notes == "غیبت") 0.0 else 8.0,
-                        hourlyWage = 0L,
-                        hourlyWageRate = 0L,
-                        hourlyHours = 0.0,
-                        overtimeHours = worker.overtimeHours,
-                        overtimeRate = worker.overtimeRate,
-                        notes = if (att.notes == "غیبت") "غیبت" else if (att.notes == "نصف روز") "نصف روز" else "تمام روز"
-                    )
-                }
-                repository.updateAttendance(updatedAtt)
-            }
         }
     }
 
@@ -484,7 +456,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
             if (existing != null) {
                 when (status) {
                     "FULL" -> {
-                        if (existing.status == AttendanceStatus.FULL_DAY || (existing.regularHours >= 8.0 && existing.notes != "غیبت" && existing.notes != "نصف روز" && existing.notes != "ساعتی")) {
+                        if (existing.status == AttendanceStatus.FULL_DAY) {
                             // Already marked full present: toggle off (delete)
                             repository.deleteAttendance(existing)
                         } else {
@@ -498,13 +470,13 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     hourlyHours = worker.hourlyHours,
                                     overtimeHours = worker.overtimeHours,
                                     overtimeRate = worker.overtimeRate,
-                                    notes = ""
+                                    notes = existing.notes
                                 )
                             )
                         }
                     }
                     "HALF" -> {
-                        if (existing.status == AttendanceStatus.HALF_DAY || (existing.regularHours == 4.0 && existing.notes == "نصف روز")) {
+                        if (existing.status == AttendanceStatus.HALF_DAY) {
                             // Already marked half day: toggle off (delete)
                             repository.deleteAttendance(existing)
                         } else {
@@ -518,13 +490,13 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     hourlyHours = worker.hourlyHours,
                                     overtimeHours = worker.overtimeHours,
                                     overtimeRate = worker.overtimeRate,
-                                    notes = ""
+                                    notes = existing.notes
                                 )
                             )
                         }
                     }
                     "HOURLY" -> {
-                        val isAlreadyHourly = existing.status == AttendanceStatus.HOURLY || existing.notes == "ساعتی" || (!WageCalculator.isAbsent(worker, existing) && worker.isHourlyEnabled)
+                        val isAlreadyHourly = existing.status == AttendanceStatus.HOURLY
                         if (isAlreadyHourly) {
                             // Toggle to absent
                             repository.updateAttendance(
@@ -535,7 +507,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     overtimeHours = 0.0,
                                     hourlyHours = 0.0,
                                     dailyWage = 0L,
-                                    notes = ""
+                                    notes = existing.notes
                                 )
                             )
                         } else {
@@ -550,7 +522,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     hourlyHours = if (worker.hourlyHours > 0) worker.hourlyHours else 8.0,
                                     overtimeHours = worker.overtimeHours,
                                     overtimeRate = worker.overtimeRate,
-                                    notes = ""
+                                    notes = existing.notes
                                 )
                             )
                         }
@@ -570,7 +542,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                         hourlyHours = if (worker.hourlyHours > 0) worker.hourlyHours else 8.0,
                                         overtimeHours = worker.overtimeHours,
                                         overtimeRate = worker.overtimeRate,
-                                        notes = ""
+                                        notes = existing.notes
                                     )
                                 )
                             } else {
@@ -585,7 +557,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                         hourlyHours = 0.0,
                                         overtimeHours = worker.overtimeHours,
                                         overtimeRate = worker.overtimeRate,
-                                        notes = ""
+                                        notes = existing.notes
                                     )
                                 )
                             }
@@ -598,7 +570,7 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
                                     overtimeHours = 0.0,
                                     hourlyHours = 0.0,
                                     dailyWage = 0L,
-                                    notes = ""
+                                    notes = existing.notes
                                 )
                             )
                         }

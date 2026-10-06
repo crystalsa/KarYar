@@ -5,7 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextDirectionHeuristics
+import android.text.TextPaint
+import androidx.core.content.res.ResourcesCompat
+import com.example.R
+import com.example.data.local.entity.ExpenseEntity
 import com.example.domain.model.DashboardAnalytics
 import com.example.domain.model.WorkerPerformance
 import java.io.File
@@ -13,8 +21,16 @@ import java.io.FileOutputStream
 
 object PdfExportUtil {
 
+    private const val PAGE_WIDTH = 595
+    private const val PAGE_HEIGHT = 842
+    private const val MARGIN_LEFT = 30f
+    private const val MARGIN_RIGHT = 565f
+    private const val CONTENT_WIDTH = 535
+    private const val MAX_CONTENT_Y = 760f
+
     /**
-     * Generates a modern, clean PDF report of the worker management system
+     * Generates a multi-page, professional PDF report with embedded Persian font,
+     * proper RTL text shaping via StaticLayout, no record truncation, and complete financial reconciliation.
      */
     fun exportToPdf(
         context: Context,
@@ -22,24 +38,99 @@ object PdfExportUtil {
         employerName: String,
         foremanName: String,
         analytics: DashboardAnalytics,
-        performances: List<WorkerPerformance>
+        performances: List<WorkerPerformance>,
+        expenses: List<ExpenseEntity> = emptyList()
     ): File {
-        val pdfDoc = PdfDocument()
-        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create() // Standard A4
-        val page = pdfDoc.startPage(pageInfo)
-        val canvas = page.canvas
+        val vazirTypeface: Typeface = try {
+            ResourcesCompat.getFont(context, R.font.vazirmatn) ?: Typeface.DEFAULT
+        } catch (_: Exception) {
+            Typeface.DEFAULT
+        }
 
-        drawPdfContent(
+        val pdfDoc = PdfDocument()
+        var pageNumber = 1
+
+        var pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+        var page = pdfDoc.startPage(pageInfo)
+        var canvas = page.canvas
+
+        // 1. First Page Header
+        drawFirstPageHeader(
             canvas = canvas,
+            typeface = vazirTypeface,
             projectName = projectName,
             employerName = employerName,
             foremanName = foremanName,
-            analytics = analytics,
-            performances = performances
+            analytics = analytics
         )
 
+        // 2. Financial Summary Cards on First Page
+        drawFinancialSummaryCards(canvas, vazirTypeface, analytics)
+
+        // 3. Workers Table Title
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            typeface = vazirTypeface
+            textSize = 12.5f
+            isFakeBoldText = true
+            color = Color.parseColor("#0F172A")
+        }
+        drawRtlText(canvas, "صورت‌جلسه کارکرد و تسویه حساب هر کارگر (تفکیک به ازای شناسه کارگر):", MARGIN_LEFT, 245f, textPaint, CONTENT_WIDTH)
+
+        // Table Header
+        var currentY = 265f
+        drawTableHeader(canvas, vazirTypeface, currentY)
+        currentY += 22f
+
+        // Draw Workers Rows (All workers, no truncation, separate row per worker ID)
+        val rowHeight = 22f
+        for ((index, p) in performances.withIndex()) {
+            if (currentY + rowHeight > MAX_CONTENT_Y) {
+                // Finish current page
+                drawPageFooter(canvas, vazirTypeface, pageNumber)
+                pdfDoc.finishPage(page)
+
+                // Start next page
+                pageNumber++
+                pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+                page = pdfDoc.startPage(pageInfo)
+                canvas = page.canvas
+
+                // Compact Header for continuation page
+                drawContinuationHeader(canvas, vazirTypeface, projectName)
+                currentY = 60f
+                drawTableHeader(canvas, vazirTypeface, currentY)
+                currentY += 22f
+            }
+
+            drawWorkerRow(canvas, vazirTypeface, index, p, currentY)
+            currentY += rowHeight
+        }
+
+        // Summary and Signatures: if not enough room on current page, create a final page
+        val summaryNeededHeight = 180f
+        if (currentY + summaryNeededHeight > MAX_CONTENT_Y) {
+            drawPageFooter(canvas, vazirTypeface, pageNumber)
+            pdfDoc.finishPage(page)
+
+            pageNumber++
+            pageInfo = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create()
+            page = pdfDoc.startPage(pageInfo)
+            canvas = page.canvas
+
+            drawContinuationHeader(canvas, vazirTypeface, projectName)
+            currentY = 60f
+        }
+
+        currentY += 12f
+        drawSummaryAndExpensesBox(canvas, vazirTypeface, currentY, analytics, expenses)
+        currentY += 95f
+
+        drawSignatures(canvas, vazirTypeface, currentY, foremanName, employerName)
+
+        drawPageFooter(canvas, vazirTypeface, pageNumber)
         pdfDoc.finishPage(page)
 
+        // Save to cache/exports
         val fileName = "گزارش_کارگاه_${System.currentTimeMillis()}.pdf"
         val cacheDir = File(context.cacheDir, "exports").apply { mkdirs() }
         val file = File(cacheDir, fileName)
@@ -52,139 +143,241 @@ object PdfExportUtil {
         return file
     }
 
-    private fun drawPdfContent(
+    private fun drawFirstPageHeader(
         canvas: Canvas,
+        typeface: Typeface,
         projectName: String,
         employerName: String,
         foremanName: String,
-        analytics: DashboardAnalytics,
-        performances: List<WorkerPerformance>
+        analytics: DashboardAnalytics
     ) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
 
-        // 1. Header background banner
-        paint.color = Color.parseColor("#0F172A") // Deep slate navy
-        canvas.drawRect(0f, 0f, 595f, 90f, paint)
+        // Banner background
+        paint.color = Color.parseColor("#0F172A")
+        canvas.drawRect(0f, 0f, PAGE_WIDTH.toFloat(), 85f, paint)
 
-        // Header Gold accent line
+        // Gold accent line
         paint.color = Color.parseColor("#F59E0B")
-        canvas.drawRect(0f, 90f, 595f, 94f, paint)
+        canvas.drawRect(0f, 85f, PAGE_WIDTH.toFloat(), 88f, paint)
 
         // Header Title
-        paint.color = Color.WHITE
-        paint.textSize = 18f
-        paint.isFakeBoldText = true
-        canvas.drawText("گزارش جامع عملکرد، حضور و غیاب و تسویه کارگران", 30f, 40f, paint)
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 15f
+            isFakeBoldText = true
+            color = Color.WHITE
+        }
+        drawRtlText(canvas, "گزارش جامع عملکرد، حضور و غیاب و تسویه کارگران", MARGIN_LEFT, 20f, titlePaint, CONTENT_WIDTH)
 
-        // Header Subtitle
-        paint.color = Color.parseColor("#94A3B8")
-        paint.textSize = 11f
-        paint.isFakeBoldText = false
+        // Subtitle
+        val subPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 10f
+            color = Color.parseColor("#94A3B8")
+        }
         val todayStr = JalaliCalendar.todayString()
-        canvas.drawText("پروژه: $projectName | تاریخ صدور: $todayStr", 30f, 65f, paint)
+        drawRtlText(canvas, "پروژه: $projectName   |   تاریخ صدور: $todayStr", MARGIN_LEFT, 52f, subPaint, CONTENT_WIDTH)
 
-        // 2. Metadata Box
+        // Metadata Box
         paint.color = Color.parseColor("#F1F5F9")
-        val metaRect = RectF(30f, 110f, 565f, 155f)
-        canvas.drawRoundRect(metaRect, 8f, 8f, paint)
+        val metaRect = RectF(MARGIN_LEFT, 98f, MARGIN_RIGHT, 140f)
+        canvas.drawRoundRect(metaRect, 6f, 6f, paint)
 
-        paint.color = Color.parseColor("#1E293B")
-        paint.textSize = 10f
-        paint.isFakeBoldText = true
-        canvas.drawText("کارفرما: $employerName", 45f, 135f, paint)
-        canvas.drawText("سرکارگر: $foremanName", 220f, 135f, paint)
-        canvas.drawText("تعداد کارگران: ${analytics.activeWorkersCount} نفر فعال", 390f, 135f, paint)
+        val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 9.5f
+            isFakeBoldText = true
+            color = Color.parseColor("#1E293B")
+        }
+        drawRtlText(canvas, "کارفرما: $employerName", 40f, 115f, metaPaint, 160)
+        drawRtlText(canvas, "سرکارگر: $foremanName", 215f, 115f, metaPaint, 160)
+        drawRtlText(canvas, "پرسنل فعال: ${Formatters.toPersianDigits(analytics.activeWorkersCount)} نفر", 400f, 115f, metaPaint, 150)
+    }
 
-        // 3. Financial Summary 3 Cards
-        val cardWidth = 170f
-        val cardHeight = 55f
-        val startY = 170f
-
-        drawStatCard(canvas, 30f, startY, cardWidth, cardHeight, "مجموع دستمزد پایه", Formatters.formatCurrency(analytics.totalWagesPaid), "#10B981")
-        drawStatCard(canvas, 212f, startY, cardWidth, cardHeight, "اضافه کاری و ساعتی", Formatters.formatCurrency(analytics.totalOvertimePaid + analytics.totalHourlyPaid), "#F59E0B")
-        drawStatCard(canvas, 395f, startY, cardWidth, cardHeight, "کل پرداختی کارگاه", Formatters.formatCurrency(analytics.grandTotalProjectCost), "#6366F1")
-
-        // 4. Section Title: Workers Performance Table
+    private fun drawContinuationHeader(canvas: Canvas, typeface: Typeface, projectName: String) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.parseColor("#0F172A")
-        paint.textSize = 13f
-        paint.isFakeBoldText = true
-        canvas.drawText("صورت‌جلسه کارکرد و خالص دریافتی هر کارگر", 30f, 255f, paint)
+        canvas.drawRect(0f, 0f, PAGE_WIDTH.toFloat(), 40f, paint)
 
-        // Table Header
+        paint.color = Color.parseColor("#F59E0B")
+        canvas.drawRect(0f, 40f, PAGE_WIDTH.toFloat(), 42f, paint)
+
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 11f
+            isFakeBoldText = true
+            color = Color.WHITE
+        }
+        drawRtlText(canvas, "پروژه: $projectName  |  ادامه صورت‌جلسه کارکرد و تسویه حساب پرسنل", MARGIN_LEFT, 15f, textPaint, CONTENT_WIDTH)
+    }
+
+    private fun drawFinancialSummaryCards(canvas: Canvas, typeface: Typeface, analytics: DashboardAnalytics) {
+        val cardWidth = 124f
+        val cardHeight = 52f
+        val startY = 152f
+
+        drawStatCard(canvas, typeface, 30f, startY, cardWidth, cardHeight, "مجموع دستمزد پایه", Formatters.formatCurrency(analytics.totalWagesPaid), "#10B981")
+        drawStatCard(canvas, typeface, 166f, startY, cardWidth, cardHeight, "اضافه کاری و ساعتی", Formatters.formatCurrency(analytics.totalOvertimePaid + analytics.totalHourlyPaid), "#F59E0B")
+        drawStatCard(canvas, typeface, 302f, startY, cardWidth, cardHeight, "هزینه‌های کارگاه", Formatters.formatCurrency(analytics.grandTotalExpenses), "#EC4899")
+        drawStatCard(canvas, typeface, 438f, startY, cardWidth, cardHeight, "کل مخارج پروژه", Formatters.formatCurrency(analytics.grandTotalProjectCost), "#6366F1")
+    }
+
+    private fun drawTableHeader(canvas: Canvas, typeface: Typeface, y: Float) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.parseColor("#E2E8F0")
-        canvas.drawRect(30f, 268f, 565f, 290f, paint)
+        canvas.drawRect(MARGIN_LEFT, y, MARGIN_RIGHT, y + 20f, paint)
 
-        paint.color = Color.parseColor("#334155")
-        paint.textSize = 9.5f
-        paint.isFakeBoldText = true
-
-        canvas.drawText("ردیف", 35f, 283f, paint)
-        canvas.drawText("نام کارگر", 75f, 283f, paint)
-        canvas.drawText("تخصص / شغل", 190f, 283f, paint)
-        canvas.drawText("روز / ساعت", 300f, 283f, paint)
-        canvas.drawText("اضافه کاری", 390f, 283f, paint)
-        canvas.drawText("خالص دریافتی", 485f, 283f, paint)
-
-        // Table Rows
-        var rowY = 308f
-        paint.isFakeBoldText = false
-        performances.take(12).forEachIndexed { index, p ->
-            if (index % 2 == 0) {
-                paint.color = Color.parseColor("#F8FAFC")
-                canvas.drawRect(30f, rowY - 14f, 565f, rowY + 8f, paint)
-            }
-
-            paint.color = Color.parseColor("#1E293B")
-            paint.textSize = 9f
-            canvas.drawText("${index + 1}", 38f, rowY, paint)
-            canvas.drawText(p.worker.name, 75f, rowY, paint)
-            canvas.drawText(p.worker.role, 190f, rowY, paint)
-            canvas.drawText("${p.totalShifts} روز (${p.regularHours}h)", 300f, rowY, paint)
-            canvas.drawText("${p.overtimeHours}h", 390f, rowY, paint)
-
-            paint.color = Color.parseColor("#047857")
-            paint.isFakeBoldText = true
-            canvas.drawText(Formatters.formatCurrency(p.netPayout), 485f, rowY, paint)
-            paint.isFakeBoldText = false
-
-            rowY += 22f
+        val headerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 8.5f
+            isFakeBoldText = true
+            color = Color.parseColor("#334155")
         }
 
-        // 5. Cost Distribution Breakdown Box
-        rowY += 15f
+        drawRtlText(canvas, "ردیف", 34f, y + 4f, headerPaint, 25)
+        drawRtlText(canvas, "نام کارگر (شناسه)", 65f, y + 4f, headerPaint, 115)
+        drawRtlText(canvas, "تخصص / شغل", 185f, y + 4f, headerPaint, 95)
+        drawRtlText(canvas, "کارکرد عادی", 285f, y + 4f, headerPaint, 75)
+        drawRtlText(canvas, "اضافه کار", 365f, y + 4f, headerPaint, 55)
+        drawRtlText(canvas, "مزایا/کسورات/سهم", 425f, y + 4f, headerPaint, 65)
+        drawRtlText(canvas, "خالص دریافتی", 495f, y + 4f, headerPaint, 70)
+    }
+
+    private fun drawWorkerRow(
+        canvas: Canvas,
+        typeface: Typeface,
+        index: Int,
+        p: WorkerPerformance,
+        y: Float
+    ) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+        if (index % 2 == 0) {
+            paint.color = Color.parseColor("#F8FAFC")
+            canvas.drawRect(MARGIN_LEFT, y - 2f, MARGIN_RIGHT, y + 19f, paint)
+        }
+
+        val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 8.5f
+            color = Color.parseColor("#1E293B")
+        }
+
+        // 1. Index
+        drawRtlText(canvas, Formatters.toPersianDigits(index + 1), 34f, y + 3f, textPaint, 25)
+
+        // 2. Name with ID (guarantees separate distinction if two workers share the same name)
+        val nameWithId = "${p.worker.name} (#${p.worker.id})"
+        drawRtlText(canvas, nameWithId, 65f, y + 3f, textPaint, 115)
+
+        // 3. Role
+        drawRtlText(canvas, p.worker.role, 185f, y + 3f, textPaint, 95)
+
+        // 4. Work days / Regular hours
+        val workStr = if (p.hourlyHours > 0) {
+            "${Formatters.toPersianDigits(p.totalShifts)}ر (${Formatters.toPersianDigits(p.hourlyHours)}ساعتی)"
+        } else {
+            "${Formatters.toPersianDigits(p.totalShifts)}ر (${Formatters.toPersianDigits(p.regularHours)}س)"
+        }
+        drawRtlText(canvas, workStr, 285f, y + 3f, textPaint, 75)
+
+        // 5. Overtime
+        val otStr = if (p.overtimeHours > 0) "${Formatters.toPersianDigits(p.overtimeHours)}س" else "-"
+        drawRtlText(canvas, otStr, 365f, y + 3f, textPaint, 55)
+
+        // 6. Net allowances / deductions / group share
+        val netAdjust = p.totalAllowances - p.totalDeductions - p.groupExpenseShare
+        val adjustStr = if (netAdjust > 0L) "+${Formatters.formatCurrency(netAdjust)}" else if (netAdjust < 0L) Formatters.formatCurrency(netAdjust) else "۰"
+        val adjustPaint = TextPaint(textPaint).apply {
+            color = if (netAdjust > 0L) Color.parseColor("#059669") else if (netAdjust < 0L) Color.parseColor("#E11D48") else Color.parseColor("#64748B")
+        }
+        drawRtlText(canvas, adjustStr, 425f, y + 3f, adjustPaint, 65)
+
+        // 7. Net Payout
+        val payoutPaint = TextPaint(textPaint).apply {
+            isFakeBoldText = true
+            color = Color.parseColor("#047857")
+        }
+        drawRtlText(canvas, Formatters.formatCurrency(p.netPayout), 495f, y + 3f, payoutPaint, 70)
+    }
+
+    private fun drawSummaryAndExpensesBox(
+        canvas: Canvas,
+        typeface: Typeface,
+        y: Float,
+        analytics: DashboardAnalytics,
+        expenses: List<ExpenseEntity>
+    ) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.parseColor("#F8FAFC")
-        val expBox = RectF(30f, rowY, 565f, rowY + 80f)
+        val expBox = RectF(MARGIN_LEFT, y, MARGIN_RIGHT, y + 80f)
         canvas.drawRoundRect(expBox, 8f, 8f, paint)
 
-        paint.color = Color.parseColor("#0F172A")
-        paint.textSize = 11f
-        paint.isFakeBoldText = true
-        canvas.drawText("خلاصه وضعیت کارکرد پرسنل کارگاه:", 45f, rowY + 22f, paint)
+        paint.color = Color.parseColor("#E2E8F0")
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 1f
+        canvas.drawRoundRect(expBox, 8f, 8f, paint)
 
-        paint.color = Color.parseColor("#475569")
-        paint.textSize = 9.5f
-        paint.isFakeBoldText = false
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 9.5f
+            isFakeBoldText = true
+            color = Color.parseColor("#0F172A")
+        }
+        drawRtlText(canvas, "خلاصه آمار عملکرد و هزینه‌های این کارگاه:", MARGIN_LEFT + 12f, y + 10f, titlePaint, CONTENT_WIDTH - 24)
 
-        canvas.drawText("• کل کارکرد ثبت‌شده: ${analytics.totalWorkHours} ساعت", 45f, rowY + 45f, paint)
-        canvas.drawText("• کل اضافه کاری ثبت‌شده: ${analytics.totalOvertimeHours} ساعت", 45f, rowY + 65f, paint)
+        val itemPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 8.5f
+            color = Color.parseColor("#334155")
+        }
 
-        canvas.drawText("• تعداد کارگران فعال: ${analytics.activeWorkersCount} نفر", 280f, rowY + 45f, paint)
-        canvas.drawText("• مجموع روزهای کاری ثبت‌شده: ${analytics.totalWorkDaysCount} روز کاری", 280f, rowY + 65f, paint)
+        // Line 1
+        drawRtlText(canvas, "• کل ساعات کارکرد عادی: ${Formatters.toPersianDigits(analytics.totalWorkHours)} ساعت", MARGIN_LEFT + 12f, y + 30f, itemPaint, 240)
+        drawRtlText(canvas, "• کل اضافه کاری: ${Formatters.toPersianDigits(analytics.totalOvertimeHours)} ساعت", MARGIN_LEFT + 270f, y + 30f, itemPaint, 240)
 
-        // 6. Signature Lines at bottom
-        val sigY = 760f
+        // Line 2: Note totalWorkDaysCount used correctly
+        drawRtlText(canvas, "• مجموع روزهای کاری ثبت‌شده: ${Formatters.toPersianDigits(analytics.totalWorkDaysCount)} روز", MARGIN_LEFT + 12f, y + 48f, itemPaint, 240)
+        drawRtlText(canvas, "• دستمزد ساعتی پرداختی: ${Formatters.formatCurrency(analytics.totalHourlyPaid)}", MARGIN_LEFT + 270f, y + 48f, itemPaint, 240)
+
+        // Line 3: Expenses breakdown matching Dashboard
+        drawRtlText(canvas, "• کل هزینه‌های جانبی کارگاه: ${Formatters.formatCurrency(analytics.grandTotalExpenses)}", MARGIN_LEFT + 12f, y + 64f, itemPaint, 240)
+        val grandTotalPaint = TextPaint(itemPaint).apply {
+            isFakeBoldText = true
+            color = Color.parseColor("#4338CA")
+        }
+        drawRtlText(canvas, "• هزینه کل نهایی پروژه: ${Formatters.formatCurrency(analytics.grandTotalProjectCost)}", MARGIN_LEFT + 270f, y + 64f, grandTotalPaint, 240)
+    }
+
+    private fun drawSignatures(canvas: Canvas, typeface: Typeface, y: Float, foremanName: String, employerName: String) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.color = Color.parseColor("#94A3B8")
-        canvas.drawLine(50f, sigY, 200f, sigY, paint)
-        canvas.drawLine(395f, sigY, 545f, sigY, paint)
+        paint.strokeWidth = 1f
+        canvas.drawLine(50f, y, 210f, y, paint)
+        canvas.drawLine(380f, y, 540f, y, paint)
 
-        paint.color = Color.parseColor("#475569")
-        paint.textSize = 9.5f
-        canvas.drawText("امضاء و تأیید سرکارگر: $foremanName", 55f, sigY + 18f, paint)
-        canvas.drawText("امضاء و تأیید کارفرما: $employerName", 400f, sigY + 18f, paint)
+        val sigPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 9f
+            color = Color.parseColor("#475569")
+        }
+        drawRtlText(canvas, "امضاء و تأیید سرکارگر: $foremanName", 50f, y + 8f, sigPaint, 170)
+        drawRtlText(canvas, "امضاء و تأیید کارفرما: $employerName", 380f, y + 8f, sigPaint, 170)
+    }
+
+    private fun drawPageFooter(canvas: Canvas, typeface: Typeface, pageNumber: Int) {
+        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 8.5f
+            color = Color.parseColor("#94A3B8")
+        }
+        val footerText = "سامانه مدیریت کارگران   |   صفحه ${Formatters.toPersianDigits(pageNumber)}"
+        drawRtlText(canvas, footerText, MARGIN_LEFT, 815f, footerPaint, CONTENT_WIDTH, Layout.Alignment.ALIGN_CENTER)
     }
 
     private fun drawStatCard(
         canvas: Canvas,
+        typeface: Typeface,
         x: Float,
         y: Float,
         width: Float,
@@ -198,18 +391,54 @@ object PdfExportUtil {
         val rect = RectF(x, y, x + width, y + height)
         canvas.drawRoundRect(rect, 6f, 6f, paint)
 
-        // Left accent indicator
+        paint.color = Color.parseColor("#E2E8F0")
+        paint.style = Paint.Style.STROKE
+        paint.strokeWidth = 0.8f
+        canvas.drawRoundRect(rect, 6f, 6f, paint)
+
+        // Accent indicator bar
+        paint.style = Paint.Style.FILL
         paint.color = Color.parseColor(accentHex)
-        val leftBar = RectF(x, y, x + 4f, y + height)
+        val leftBar = RectF(x, y, x + 3.5f, y + height)
         canvas.drawRoundRect(leftBar, 2f, 2f, paint)
 
-        paint.color = Color.parseColor("#64748B")
-        paint.textSize = 8.5f
-        canvas.drawText(label, x + 10f, y + 20f, paint)
+        val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 7.5f
+            color = Color.parseColor("#64748B")
+        }
+        drawRtlText(canvas, label, x + 7f, y + 8f, labelPaint, (width - 10).toInt())
 
-        paint.color = Color.parseColor("#0F172A")
-        paint.textSize = 9.5f
-        paint.isFakeBoldText = true
-        canvas.drawText(value, x + 10f, y + 42f, paint)
+        val valuePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            textSize = 8.5f
+            isFakeBoldText = true
+            color = Color.parseColor("#0F172A")
+        }
+        drawRtlText(canvas, value, x + 7f, y + 26f, valuePaint, (width - 10).toInt())
+    }
+
+    /**
+     * Renders Persian / Arabic text with proper letter shaping (اتصال حروف) and RTL layout direction.
+     */
+    private fun drawRtlText(
+        canvas: Canvas,
+        text: String,
+        x: Float,
+        y: Float,
+        paint: TextPaint,
+        width: Int,
+        align: Layout.Alignment = Layout.Alignment.ALIGN_NORMAL
+    ) {
+        if (text.isBlank()) return
+        val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+            .setAlignment(align)
+            .setTextDirection(TextDirectionHeuristics.RTL)
+            .setIncludePad(false)
+            .build()
+        canvas.save()
+        canvas.translate(x, y)
+        layout.draw(canvas)
+        canvas.restore()
     }
 }

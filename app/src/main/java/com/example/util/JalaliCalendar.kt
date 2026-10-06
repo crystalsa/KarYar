@@ -57,7 +57,6 @@ object JalaliCalendar {
      */
     fun gregorianToJalali(gYear: Int, gMonth: Int, gDay: Int): JalaliDate {
         val gDaysInMonth = intArrayOf(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-        val jDaysInMonth = intArrayOf(31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29)
 
         val gy = gYear - 1600
         val gm = gMonth - 1
@@ -84,6 +83,8 @@ object JalaliCalendar {
             jDayNo = (jDayNo - 1) % 365
         }
 
+        val jDaysInMonth = intArrayOf(31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, if (isLeapYear(jy)) 30 else 29)
+
         var jm = 0
         var jd = 0
         for (i in 0..11) {
@@ -94,6 +95,10 @@ object JalaliCalendar {
                 break
             }
             jDayNo -= days
+        }
+        if (jm == 0) {
+            jm = 12
+            jd = jDayNo + 1
         }
 
         return JalaliDate(jy, jm, jd)

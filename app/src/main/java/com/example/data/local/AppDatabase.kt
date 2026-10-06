@@ -1,6 +1,7 @@
 package com.example.data.local
 
 import android.content.Context
+import android.util.Log
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -418,13 +419,66 @@ abstract class AppDatabase : RoomDatabase() {
                     FROM `attendance`
                 """.trimIndent())
 
-                // Link dateFolderId in attendance
+                // Link dateFolderId in attendance. If no matching date_folder exists for (folderId, date), create one so it's not lost
+                val orphanDatesCursor = db.query("SELECT DISTINCT `folderId`, `date` FROM `attendance_new` WHERE `folderId` IN (SELECT `id` FROM `workplace_folders`) AND NOT EXISTS (SELECT 1 FROM `date_folders` df WHERE df.folderId = `attendance_new`.folderId AND df.date = `attendance_new`.date)")
+                val orphanDates = mutableListOf<Pair<Long, String>>()
+                while (orphanDatesCursor.moveToNext()) {
+                    val fId = orphanDatesCursor.getLong(0)
+                    val dStr = orphanDatesCursor.getString(1)
+                    if (!dStr.isNullOrBlank()) {
+                        orphanDates.add(fId to dStr)
+                    }
+                }
+                orphanDatesCursor.close()
+
+                for ((fId, dStr) in orphanDates) {
+                    val dayOfWeek = JalaliCalendar.getDayOfWeek(dStr)
+                    val epoch = JalaliCalendar.toEpochDay(dStr)
+                    db.execSQL(
+                        "INSERT INTO `date_folders` (`folderId`, `date`, `dayOfWeek`, `title`, `notes`, `createdAt`, `epochDay`) VALUES (?, ?, ?, 'روز کاری', '', ?, ?)",
+                        arrayOf<Any>(fId, dStr, dayOfWeek, System.currentTimeMillis(), epoch)
+                    )
+                }
+
                 db.execSQL("""
                     UPDATE `attendance_new`
                     SET `dateFolderId` = COALESCE(
                         (SELECT df.id FROM `date_folders` df WHERE df.folderId = `attendance_new`.folderId AND df.date = `attendance_new`.date LIMIT 1),
-                        0
+                        COALESCE((SELECT df2.id FROM `date_folders` df2 WHERE df2.folderId = `attendance_new`.folderId ORDER BY df2.id DESC LIMIT 1), 0)
                     )
+                """.trimIndent())
+
+                // Fix any attendance rows where dateFolderId is still 0 (create date_folder or connect to nearest/latest day)
+                val unresolvedCursor = db.query("""
+                    SELECT DISTINCT `folderId`, `date` 
+                    FROM `attendance_new` 
+                    WHERE `dateFolderId` <= 0 AND `folderId` IN (SELECT `id` FROM `workplace_folders`)
+                """.trimIndent())
+                val unresolvedDates = mutableListOf<Pair<Long, String>>()
+                while (unresolvedCursor.moveToNext()) {
+                    val fId = unresolvedCursor.getLong(0)
+                    val dStr = unresolvedCursor.getString(1) ?: JalaliCalendar.todayString()
+                    unresolvedDates.add(fId to dStr)
+                }
+                unresolvedCursor.close()
+
+                for ((fId, dStr) in unresolvedDates) {
+                    val effectiveDate = if (dStr.isNotBlank()) dStr else JalaliCalendar.todayString()
+                    val dayOfWeek = JalaliCalendar.getDayOfWeek(effectiveDate)
+                    val epoch = JalaliCalendar.toEpochDay(effectiveDate)
+                    db.execSQL(
+                        "INSERT INTO `date_folders` (`folderId`, `date`, `dayOfWeek`, `title`, `notes`, `createdAt`, `epochDay`) VALUES (?, ?, ?, 'روز کاری', '', ?, ?)",
+                        arrayOf<Any>(fId, effectiveDate, dayOfWeek, System.currentTimeMillis(), epoch)
+                    )
+                }
+
+                db.execSQL("""
+                    UPDATE `attendance_new`
+                    SET `dateFolderId` = COALESCE(
+                        (SELECT df.id FROM `date_folders` df WHERE df.folderId = `attendance_new`.folderId AND df.date = `attendance_new`.date LIMIT 1),
+                        (SELECT df2.id FROM `date_folders` df2 WHERE df2.folderId = `attendance_new`.folderId ORDER BY df2.id DESC LIMIT 1)
+                    )
+                    WHERE `dateFolderId` <= 0 AND `folderId` IN (SELECT `id` FROM `workplace_folders`)
                 """.trimIndent())
 
                 // Convert status with single CASE WHEN statement respecting explicit priorities
@@ -508,6 +562,11 @@ abstract class AppDatabase : RoomDatabase() {
                     fkViolations.add(table to rowid)
                 }
                 fkCursor.close()
+
+                if (fkViolations.isNotEmpty()) {
+                    val summary = fkViolations.groupBy { it.first }.map { "${it.key}: ${it.value.size}" }.joinToString(", ")
+                    Log.w("AppDatabase", "MIGRATION_5_6: Removing ${fkViolations.size} orphan row(s) violating foreign keys ($summary).")
+                }
 
                 for ((table, rowid) in fkViolations) {
                     db.execSQL("DELETE FROM `$table` WHERE rowid = ?", arrayOf<Any>(rowid))
