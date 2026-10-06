@@ -1,4 +1,5 @@
 import com.google.gms.googleservices.GoogleServicesPlugin.MissingGoogleServicesStrategy
+import java.util.Base64
 
 plugins {
   alias(libs.plugins.android.application)
@@ -24,6 +25,15 @@ android {
     vectorDrawables.useSupportLibrary = true
   }
 
+  val debugKeystoreFile = file("${rootDir}/debug.keystore")
+  val debugKeystoreBase64 = file("${rootDir}/debug.keystore.base64")
+  if (!debugKeystoreFile.exists() && debugKeystoreBase64.exists()) {
+    try {
+      val decoded = Base64.getDecoder().decode(debugKeystoreBase64.readText().trim())
+      debugKeystoreFile.writeBytes(decoded)
+    } catch (_: Exception) {}
+  }
+
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH")
@@ -33,8 +43,8 @@ android {
         storePassword = System.getenv("STORE_PASSWORD")
         keyAlias = System.getenv("KEY_ALIAS") ?: "upload"
         keyPassword = System.getenv("KEY_PASSWORD")
-      } else {
-        storeFile = file("${rootDir}/debug.keystore")
+      } else if (debugKeystoreFile.exists()) {
+        storeFile = debugKeystoreFile
         storePassword = "android"
         keyAlias = "androiddebugkey"
         keyPassword = "android"
@@ -43,10 +53,12 @@ android {
       enableV2Signing = true
     }
     create("debugConfig") {
-      storeFile = file("${rootDir}/debug.keystore")
-      storePassword = "android"
-      keyAlias = "androiddebugkey"
-      keyPassword = "android"
+      if (debugKeystoreFile.exists()) {
+        storeFile = debugKeystoreFile
+        storePassword = "android"
+        keyAlias = "androiddebugkey"
+        keyPassword = "android"
+      }
       enableV1Signing = true
       enableV2Signing = true
     }
@@ -60,7 +72,12 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      val customDebug = signingConfigs.findByName("debugConfig")
+      if (customDebug?.storeFile != null && customDebug.storeFile?.exists() == true) {
+        signingConfig = customDebug
+      }
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

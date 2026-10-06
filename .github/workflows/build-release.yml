@@ -40,15 +40,18 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Accept Android SDK Licenses
+      - name: Accept Android SDK Licenses & Install Platform
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Make Gradlew Executable
-        run: chmod +x gradlew
+        run: |
+          sed -i -e 's/\r$//' gradlew || true
+          chmod +x gradlew
 
       - name: Prepare Keystore & Signing Environment
         id: prep_signing
@@ -58,10 +61,22 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          # Check if release signing secrets are provided
+          # 1. Restore debug.keystore from repository base64
+          if [ -f "debug.keystore.base64" ]; then
+            echo "Decoding debug.keystore from debug.keystore.base64..."
+            base64 -d debug.keystore.base64 > debug.keystore 2>/dev/null || base64 --decode debug.keystore.base64 > debug.keystore 2>/dev/null || true
+          fi
+          
+          # If debug.keystore is still not found, generate it with keytool as fallback
+          if [ ! -f "debug.keystore" ] || [ ! -s "debug.keystore" ]; then
+            echo "Generating fallback debug.keystore..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          
+          # 2. Check if release signing secrets are provided
           if [ -n "$KEYSTORE_BASE64" ]; then
             echo "Decoding release keystore from secrets..."
-            echo "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.keystore"
+            echo "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/release.keystore" 2>/dev/null || echo "$KEYSTORE_BASE64" | base64 -d > "$GITHUB_WORKSPACE/release.keystore" 2>/dev/null || true
             echo "has_release_keystore=true" >> $GITHUB_OUTPUT
             echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/release.keystore" >> $GITHUB_ENV
             echo "STORE_PASSWORD=$STORE_PASSWORD" >> $GITHUB_ENV
@@ -72,7 +87,7 @@ jobs:
             echo "has_release_keystore=false" >> $GITHUB_OUTPUT
           fi
           
-          # Prepare .env if needed
+          # 3. Prepare .env file
           if [ ! -f ".env" ] && [ -f ".env.example" ]; then
             cp .env.example .env
           elif [ ! -f ".env" ]; then
@@ -104,16 +119,29 @@ jobs:
 
       - name: Build APK (Release or Debug)
         run: |
+          mkdir -p artifacts
           if [ "${{ steps.prep_signing.outputs.has_release_keystore }}" == "true" ]; then
             echo "Building signed Release APK..."
             ./gradlew assembleRelease --no-configuration-cache --stacktrace
-            mkdir -p artifacts
-            cp app/build/outputs/apk/release/*.apk artifacts/WorkerManager-App.apk || find app/build/outputs/apk/ -name "*.apk" -exec cp {} artifacts/WorkerManager-App.apk \;
+            APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" 2>/dev/null | head -n 1)
           else
             echo "Building Debug APK..."
             ./gradlew assembleDebug --no-configuration-cache --stacktrace
-            mkdir -p artifacts
-            cp app/build/outputs/apk/debug/*.apk artifacts/WorkerManager-App.apk || find app/build/outputs/apk/ -name "*.apk" -exec cp {} artifacts/WorkerManager-App.apk \;
+            APK_FILE=$(find app/build/outputs/apk/debug -name "*.apk" 2>/dev/null | head -n 1)
+          fi
+          
+          if [ -z "$APK_FILE" ]; then
+            echo "Searching all apk outputs..."
+            APK_FILE=$(find app/build/outputs/apk -name "*.apk" 2>/dev/null | head -n 1)
+          fi
+          
+          if [ -n "$APK_FILE" ] && [ -f "$APK_FILE" ]; then
+            cp "$APK_FILE" artifacts/WorkerManager-App.apk
+            echo "Successfully generated APK: artifacts/WorkerManager-App.apk"
+            ls -lh artifacts/WorkerManager-App.apk
+          else
+            echo "ERROR: No APK file was found after build!"
+            exit 1
           fi
 
       - name: Upload APK Artifact
