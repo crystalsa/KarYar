@@ -552,22 +552,12 @@ private fun WorkerCumulativePerformanceCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            if (worker.role.isNotBlank()) {
-                                Text(
-                                    text = worker.role,
-                                    fontSize = 11.sp,
-                                    color = AmberAccent,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
+                        if (worker.role.isNotBlank()) {
                             Text(
-                                text = "• ${Formatters.toPersianDigits(perf.totalShifts)} روز کارکرد",
+                                text = worker.role,
                                 fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = AmberAccent,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -645,13 +635,13 @@ private fun WorkerCumulativePerformanceCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "کل روزهای کارکرد:",
+                                    text = "وضعیت کارکرد پرسنل:",
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Medium,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
-                                    text = "${Formatters.toPersianDigits(perf.totalShifts)} روز کاری (${Formatters.toPersianDigits(perf.regularHours.toString().removeSuffix(".0"))} ساعت کار عادی)",
+                                    text = perf.formatWorkSummary(),
                                     fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = EmeraldAccent

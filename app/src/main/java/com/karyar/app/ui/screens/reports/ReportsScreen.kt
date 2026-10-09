@@ -341,7 +341,7 @@ private fun WorkerPaySlipCard(perf: WorkerPerformance) {
                 if (perf.worker.isHourlyEnabled) {
                     ReportRow("ساعات کارکرد عادی:", "${Formatters.toPersianDigits(perf.hourlyHours)} ساعت")
                 } else {
-                    ReportRow("تعداد روزهای کارکرد:", "${Formatters.toPersianDigits(perf.totalShifts)} روز")
+                    ReportRow("وضعیت کارکرد:", perf.formatWorkSummary())
                     ReportRow("دستمزد پایه تجمیعی:", Formatters.formatCurrency(perf.baseWageTotal))
                 }
 

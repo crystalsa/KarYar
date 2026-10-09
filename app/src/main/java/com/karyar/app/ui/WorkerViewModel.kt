@@ -185,13 +185,24 @@ class WorkerViewModel(application: Application) : AndroidViewModel(application) 
     // Reactive Analytics for the current folder - synced with all days & all workers
     val analytics: StateFlow<DashboardAnalytics> = combine(
         financialSummary,
-        workers
-    ) { summary, workerList ->
+        workers,
+        dateFolders,
+        attendanceList
+    ) { summary, workerList, dayFolders, attList ->
+        val distinctCalendarDays = if (dayFolders.isNotEmpty()) {
+            dayFolders.size
+        } else {
+            val attendedDates = attList.filter { it.status != com.karyar.app.data.local.entity.AttendanceStatus.ABSENT }
+                .map { it.date }
+                .distinct()
+                .size
+            if (attendedDates > 0) attendedDates else if (summary.totalWorkDaysCount > 0) 1 else 0
+        }
         DashboardAnalytics(
             totalWorkersCount = workerList.size,
             activeWorkersCount = workerList.count { it.isActive },
             todayAttendanceCount = summary.todayAttendanceCount,
-            totalWorkDaysCount = summary.totalWorkDaysCount,
+            totalWorkDaysCount = distinctCalendarDays,
             totalPersonDays = summary.totalWorkDaysCount,
             totalWorkHours = summary.totalWorkHours,
             totalOvertimeHours = summary.totalOvertimeHours,

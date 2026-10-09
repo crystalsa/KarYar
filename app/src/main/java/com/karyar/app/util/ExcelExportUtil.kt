@@ -76,12 +76,14 @@ object ExcelExportUtil {
                 // Section 1: Performance Summary (تسویه حساب و کارکرد پرسنل)
                 // -------------------------------------------------------------
                 writer.append("=== خلاصه کارکرد و تسویه حساب هر کارگر ===\n")
-                writer.append("شناسه کارگر,نام کارگر,شغل / تخصص,تعداد شیفت (روز),ساعات عادی,ساعت کار ساعتی,اضافه کاری (ساعت),دستمزد پایه (تومان),دستمزد ساعتی (تومان),اضافه کاری (تومان),کمک‌هزینه‌ها (تومان),کسورات (تومان),سهم هزینه‌های گروهی (تومان),خالص دریافتی نهایی (تومان)\n")
+                writer.append("ردیف,شناسه کارگر,نام کارگر,شغل / تخصص,تفکیک وضعیت کارکرد,تعداد شیفت (روز),ساعات عادی (ساعت),ساعت کار ساعتی (ساعت),اضافه کاری (ساعت),دستمزد پایه (تومان),دستمزد ساعتی (تومان),اضافه کاری (تومان),کمک‌هزینه‌ها (تومان),کسورات (تومان),سهم هزینه‌های گروهی (تومان),خالص دریافتی نهایی (تومان)\n")
 
-                for (p in performances) {
+                for ((index, p) in performances.withIndex()) {
+                    writer.append("${index + 1},")
                     writer.append("${p.worker.id},")
                     writer.append("${escapeCsv(p.worker.name)},")
                     writer.append("${escapeCsv(p.worker.role)},")
+                    writer.append("${escapeCsv(p.formatWorkSummary())},")
                     writer.append("${p.totalShifts},")
                     writer.append("${p.regularHours},")
                     writer.append("${p.hourlyHours},")
@@ -100,12 +102,12 @@ object ExcelExportUtil {
                 // Section 2: Attendance Logs (ثبت تردد روزانه)
                 // -------------------------------------------------------------
                 writer.append("=== گزارش ثبت ورود و خروج و وضعیت روزهای کاری ===\n")
-                writer.append("تاریخ,شناسه کارگر,نام کارگر,وضعیت حضور,ساعت ورود,ساعت خروج,ساعات عادی,ساعت کار ساعتی,ساعات اضافه کار,دستمزد روزانه (تومان),دستمزد ساعتی (تومان),محل کار,کارفرما,سرکارگر,توضیحات\n")
+                writer.append("ردیف,تاریخ,شناسه کارگر,نام کارگر,وضعیت حضور,ساعت ورود,ساعت خروج,ساعات عادی,ساعت کار ساعتی,ساعات اضافه کار,دستمزد روزانه (تومان),دستمزد ساعتی (تومان),محل کار,کارفرما,سرکارگر,توضیحات\n")
 
                 // Rule: Worker identity is strictly worker.id
                 val workerMap = workers.associateBy { it.id }
 
-                for (att in attendanceList) {
+                for ((index, att) in attendanceList.withIndex()) {
                     val w = workerMap[att.workerId]
                     val wName = w?.name ?: "کارگر #${att.workerId}"
                     val statusStr = when (att.status) {
@@ -115,6 +117,7 @@ object ExcelExportUtil {
                         AttendanceStatus.ABSENT -> "غایب"
                     }
 
+                    writer.append("${index + 1},")
                     writer.append("${escapeCsv(att.date)},")
                     writer.append("${att.workerId},")
                     writer.append("${escapeCsv(wName)},")
@@ -138,10 +141,11 @@ object ExcelExportUtil {
                 // -------------------------------------------------------------
                 if (expenses.isNotEmpty()) {
                     writer.append("=== صورت هزینه‌های کارگاه و پروژه ===\n")
-                    writer.append("تاریخ,عنوان هزینه,دسته‌بندی,نوع تسهیم,کارگر منتسب,مبلغ (تومان),توضیحات\n")
-                    for (exp in expenses) {
+                    writer.append("ردیف,تاریخ,عنوان هزینه,دسته‌بندی,نوع تسهیم,کارگر منتسب,مبلغ (تومان),توضیحات\n")
+                    for ((index, exp) in expenses.withIndex()) {
                         val scopeStr = if (exp.scope == "GROUP") "سهم گروهی (تقسیم بین کل کارگران)" else "اختصاصی فرد"
                         val assignedWorker = exp.workerName ?: "-"
+                        writer.append("${index + 1},")
                         writer.append("${escapeCsv(exp.date)},")
                         writer.append("${escapeCsv(exp.title)},")
                         writer.append("${escapeCsv(exp.category)},")
@@ -159,8 +163,10 @@ object ExcelExportUtil {
                 if (analytics != null) {
                     writer.append("=== خلاصه آمار و تعهدات کل کارگاه ===\n")
                     writer.append("شاخص,مقدار\n")
+                    writer.append("تعداد کل کارگران,${analytics.totalWorkersCount}\n")
                     writer.append("تعداد پرسنل فعال,${analytics.activeWorkersCount}\n")
-                    writer.append("مجموع روزهای کاری ثبت‌شده,${analytics.totalWorkDaysCount}\n")
+                    writer.append("تعداد روزهای کاری کارگاه (تقویمی),${analytics.totalWorkDaysCount}\n")
+                    writer.append("مجموع کارکرد پرسنل (نفر-روز / شیفت),${analytics.totalPersonDays}\n")
                     writer.append("مجموع ساعات کارکرد عادی,${analytics.totalWorkHours}\n")
                     writer.append("مجموع ساعات اضافه کاری,${analytics.totalOvertimeHours}\n")
                     writer.append("مجموع دستمزد پایه پرداخت‌شده (تومان),${analytics.totalWagesPaid}\n")

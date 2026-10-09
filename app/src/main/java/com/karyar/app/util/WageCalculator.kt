@@ -365,8 +365,19 @@ object WageCalculator {
         var accomDeductionTotal = 0L
         var medDeductionTotal = 0L
 
+        var fullDays = 0
+        var halfDays = 0
+        var hourlyDays = 0
+        var absentDays = 0
+
         for (att in attendances) {
             val res = calculateDay(worker, att, overtimeMultiplier)
+            when {
+                isAbsent(worker, att) -> absentDays++
+                isHourly(worker, att) -> hourlyDays++
+                isHalfDay(worker, att) -> halfDays++
+                else -> fullDays++
+            }
             if (res.isWorkingDay) {
                 shifts++
                 regHours += res.regularHours
@@ -417,6 +428,10 @@ object WageCalculator {
             baseWageTotal = baseWageTotal,
             hourlyPayTotal = hourlyPayTotal,
             overtimePayTotal = otPayTotal,
+            fullDaysCount = fullDays,
+            halfDaysCount = halfDays,
+            hourlyDaysCount = hourlyDays,
+            absentDaysCount = absentDays,
             totalAllowances = totalAllowances,
             transitAllowanceTotal = transitAllowanceTotal,
             foodAllowanceTotal = foodAllowanceTotal,

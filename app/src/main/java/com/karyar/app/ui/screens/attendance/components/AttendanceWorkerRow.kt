@@ -118,8 +118,8 @@ fun AttendanceWorkerRow(
                     else if (isFullDay) add("تمام روز")
                     else if (isHalfDay) add("نصف روز")
                     else if (isAbsent) add("غایب")
-                    if (hasHourly && !isHourlyChecked) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))}س ساعتی")
-                    if (hasOvertime) add("+${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))}س اضافه")
+                    if (hasHourly && !isHourlyChecked) add("${Formatters.toPersianDigits(hHours.toString().removeSuffix(".0"))} ساعت ساعتی")
+                    if (hasOvertime) add("+${Formatters.toPersianDigits(otHours.toString().removeSuffix(".0"))} ساعت اضافه")
                 }.joinToString(" • ")
 
                 Text(
